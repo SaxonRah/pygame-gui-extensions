@@ -956,15 +956,8 @@ class ColorPropertyRenderer(PropertyRenderer):
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            swatch_size = self.control_rect.height - 4
-            swatch_rect = pygame.Rect(
-                self.control_rect.x + 2,
-                self.control_rect.y + 2,
-                swatch_size,
-                swatch_size
-            )
-
-            if swatch_rect.collidepoint(relative_pos):
+            # CHANGE: Make entire control area clickable, not just the swatch
+            if self.control_rect.collidepoint(relative_pos):
                 if not self.property.is_readonly():
                     self.color_picker_open = not self.color_picker_open
                     if self.color_picker_open:
@@ -1031,6 +1024,11 @@ class VectorPropertyRenderer(PropertyRenderer):
         self.cursor_pos = 0
         self.blink_timer = 0
         self.show_cursor = True
+
+        # Ensure the property value is properly formatted as floats from the start
+        if self.property.value:
+            vector_value = self._get_vector_value()
+            self.property.value = vector_value
 
     def _get_vector_value(self) -> List[float]:
         """Get vector as list of floats"""
@@ -1207,6 +1205,7 @@ class PropertyInspectorPanel(UIElement):
         # Property data
         self.properties: Dict[str, PropertySchema] = {}
         self.sections: Dict[str, PropertySection] = {}
+        self._original_properties: List[PropertySchema] = []
         self.target_object: Any = None
         self.change_callback: Optional[Callable[[str, Any, Any], None]] = None
 
@@ -1343,6 +1342,9 @@ class PropertyInspectorPanel(UIElement):
         self.sections.clear()
         self.renderers.clear()
 
+        # Store the original, unfiltered properties list
+        self._original_properties = properties.copy()
+
         # Organize properties by section
         for prop in properties:
             if prop.is_hidden():
@@ -1471,13 +1473,14 @@ class PropertyInspectorPanel(UIElement):
 
         # Draw properties
         open_dropdowns = []  # Track dropdown renderers for later drawing
+        open_color_pickers = []  # Track color pickers
 
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
                 # Check if property is visible
-                if (renderer.rect.y >= -self.config.row_height and
-                        renderer.rect.y < self.rect.height):
+                # if (renderer.rect.y >= -self.config.row_height and renderer.rect.y < self.rect.height):
+                if -self.config.row_height <= renderer.rect.y < self.rect.height:
 
                     # Calculate surface rect (clamped to image bounds)
                     surface_y = max(0, renderer.rect.y)
@@ -1519,6 +1522,13 @@ class PropertyInspectorPanel(UIElement):
                                 # Store for later drawing on main surface
                                 if renderer.dropdown_open:
                                     open_dropdowns.append((renderer, old_rect, old_label_rect, old_control_rect))
+                            # Special handling for color picker renderers
+                            elif isinstance(renderer, ColorPropertyRenderer):
+                                # Draw property without color picker on subsurface
+                                self._draw_property_without_color_picker(renderer, prop_surface)
+                                # Store for later drawing on main surface
+                                if renderer.color_picker_open:
+                                    open_color_pickers.append((renderer, old_rect, old_label_rect, old_control_rect))
                             else:
                                 # Draw the property normally
                                 renderer.draw(prop_surface, self.themed_font, self.themed_colors)
@@ -1536,6 +1546,11 @@ class PropertyInspectorPanel(UIElement):
         for renderer, orig_rect, orig_label_rect, orig_control_rect in open_dropdowns:
             if renderer.dropdown_open and renderer.property.options:
                 self._draw_dropdown_list(renderer, orig_rect, orig_label_rect, orig_control_rect)
+
+        # Draw open color pickers on the main surface (after all properties)
+        for renderer, orig_rect, orig_label_rect, orig_control_rect in open_color_pickers:
+            if renderer.color_picker_open:
+                self._draw_color_picker_popup(renderer, orig_rect, orig_label_rect, orig_control_rect)
 
         # Draw border
         border_color = self.themed_colors.get('normal_border', pygame.Color(80, 80, 80))
@@ -1636,6 +1651,41 @@ class PropertyInspectorPanel(UIElement):
             except Exception as e:
                 if PROPERTY_DEBUG:
                     print(f"Error rendering dropdown option: {e}")
+
+    def _draw_property_without_color_picker(self, renderer: ColorPropertyRenderer, surface: pygame.Surface):
+        """Draw color property without the color picker"""
+        # Temporarily disable color picker for drawing
+        color_picker_open = renderer.color_picker_open
+        renderer.color_picker_open = False
+
+        # Draw the property
+        renderer.draw(surface, self.themed_font, self.themed_colors)
+
+        # Restore color picker state
+        renderer.color_picker_open = color_picker_open
+
+    def _draw_color_picker_popup(self, renderer: ColorPropertyRenderer, orig_rect: pygame.Rect,
+                                 orig_label_rect: pygame.Rect, orig_control_rect: pygame.Rect):
+        """Draw color picker popup on the main surface"""
+        if not renderer.color_picker_open:
+            return
+
+        # Temporarily restore original geometry
+        old_rect = renderer.rect
+        old_label_rect = renderer.label_rect
+        old_control_rect = renderer.control_rect
+
+        renderer.rect = orig_rect
+        renderer.label_rect = orig_label_rect
+        renderer.control_rect = orig_control_rect
+
+        # Draw color picker directly on main surface
+        renderer._draw_color_picker(self.image, self.themed_colors)
+
+        # Restore current geometry
+        renderer.rect = old_rect
+        renderer.label_rect = old_label_rect
+        renderer.control_rect = old_control_rect
 
     def _draw_section_header(self, section: PropertySection, rect: pygame.Rect):
         """Draw a section header"""
@@ -1746,24 +1796,8 @@ class PropertyInspectorPanel(UIElement):
 
     def _handle_left_click(self, pos: Tuple[int, int]) -> bool:
         """Handle left mouse click"""
-        # Check section headers first
-        for section_id, rect in self.section_rects.items():
-            if rect.collidepoint(pos):
-                section = self.sections[section_id]
-                section.expanded = not section.expanded
 
-                event_data = {
-                    'section': section,
-                    'ui_element': self,
-                    'expanded': section.expanded
-                }
-                pygame.event.post(pygame.event.Event(UI_PROPERTY_SECTION_TOGGLED, event_data))
-
-                self.rebuild_ui()
-                self._rebuild_image()
-                return True
-
-        # Check open dropdown lists FIRST before other properties
+        # Check if ANY dropdown is open - if so, handle ALL clicks here
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
@@ -1793,12 +1827,50 @@ class PropertyInspectorPanel(UIElement):
                             self._rebuild_image()
                             return True
                         else:
-                            # Click outside dropdown - close it
+                            # Click outside dropdown - close it AND CONSUME THE CLICK
                             renderer.dropdown_open = False
                             self._rebuild_image()
-                            # Don't return True here - let the click continue to be processed
+                            return True  # CHANGE: Return True to consume the click
 
-        # Now check property renderers normally
+        # Check if ANY color picker is open - if so, handle ALL clicks here
+        for prop_id in self.visible_properties:
+            if prop_id in self.renderers:
+                renderer = self.renderers[prop_id]
+                if isinstance(renderer, ColorPropertyRenderer) and renderer.color_picker_open:
+                    if renderer.picker_rect and renderer.picker_rect.collidepoint(pos):
+                        # Forward click to color picker renderer
+                        consumed = renderer.handle_event(
+                            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': pos}),
+                            pos
+                        )
+                        if consumed:
+                            self._check_property_changed(prop_id)
+                            self._rebuild_image()
+                        return True
+                    else:
+                        # Click outside color picker - close it AND CONSUME THE CLICK
+                        renderer.color_picker_open = False
+                        self._rebuild_image()
+                        return True  # CHANGE: Return True to consume the click
+
+        # Only check section headers if NO popups are open
+        for section_id, rect in self.section_rects.items():
+            if rect.collidepoint(pos):
+                section = self.sections[section_id]
+                section.expanded = not section.expanded
+
+                event_data = {
+                    'section': section,
+                    'ui_element': self,
+                    'expanded': section.expanded
+                }
+                pygame.event.post(pygame.event.Event(UI_PROPERTY_SECTION_TOGGLED, event_data))
+
+                self.rebuild_ui()
+                self._rebuild_image()
+                return True
+
+        # Finally check property renderers normally
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
@@ -1841,6 +1913,20 @@ class PropertyInspectorPanel(UIElement):
 
     def _handle_mouse_up(self, pos: Tuple[int, int]) -> bool:
         """Handle mouse up"""
+        # Check open color pickers first
+        for prop_id in self.visible_properties:
+            if prop_id in self.renderers:
+                renderer = self.renderers[prop_id]
+                if isinstance(renderer, ColorPropertyRenderer) and renderer.color_picker_open:
+                    if renderer.picker_rect and renderer.picker_rect.collidepoint(pos):
+                        consumed = renderer.handle_event(
+                            pygame.event.Event(pygame.MOUSEBUTTONUP, {'button': 1}), pos
+                        )
+                        if consumed:
+                            self._rebuild_image()
+                            return True
+
+        # Original logic for other renderers
         consumed = False
         for renderer in self.renderers.values():
             if renderer.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, {'button': 1}), pos):
@@ -1853,6 +1939,7 @@ class PropertyInspectorPanel(UIElement):
         """Handle mouse motion"""
         hover_changed = False
         mouse_over_dropdown = False
+        mouse_over_color_picker = False
 
         # Check dropdown lists first for hover states
         for prop_id in self.visible_properties:
@@ -1884,8 +1971,23 @@ class PropertyInspectorPanel(UIElement):
                                 renderer.hovered_option = -1
                                 hover_changed = True
 
-        # Only update property hover states if mouse is NOT over a dropdown
-        if not mouse_over_dropdown:
+        # Check color pickers for hover states
+        if not mouse_over_dropdown:  # Only if not over dropdown
+            for prop_id in self.visible_properties:
+                if prop_id in self.renderers:
+                    renderer = self.renderers[prop_id]
+                    if isinstance(renderer, ColorPropertyRenderer) and renderer.color_picker_open:
+                        if renderer.picker_rect and renderer.picker_rect.collidepoint(pos):
+                            mouse_over_color_picker = True
+                            # Forward motion to color picker
+                            if renderer.handle_event(
+                                pygame.event.Event(pygame.MOUSEMOTION, {'pos': pos}), pos
+                            ):
+                                hover_changed = True
+                            break
+
+        # Only update property hover states if mouse is NOT over a dropdown OR color picker
+        if not mouse_over_dropdown and not mouse_over_color_picker:
             for prop_id in self.visible_properties:
                 if prop_id in self.renderers:
                     renderer = self.renderers[prop_id]
@@ -1894,7 +1996,7 @@ class PropertyInspectorPanel(UIElement):
                         renderer.is_hovered = new_hovered
                         hover_changed = True
         else:
-            # Clear hover states for all properties when mouse is over dropdown
+            # Clear hover states for all properties when mouse is over dropdown/color picker
             for prop_id in self.visible_properties:
                 if prop_id in self.renderers:
                     renderer = self.renderers[prop_id]
@@ -2103,7 +2205,8 @@ class PropertyInspectorPanel(UIElement):
         if self.config.show_advanced_properties != show:
             self.config.show_advanced_properties = show
             # Need to rebuild everything since visibility changed
-            properties = list(self.properties.values())
+            # properties = list(self.properties.values())
+            properties = self._original_properties
             target = self.target_object
             self.set_properties(properties, target)
 
@@ -2173,7 +2276,7 @@ def create_sample_properties() -> List[PropertySchema]:
             id="position",
             label="Position",
             property_type=PropertyType.VECTOR3,
-            value=[0, 0, 0],
+            value=[0.00, 0.00, 0.00],
             section="Transform",
             order=0,
             component_labels=["X", "Y", "Z"],
@@ -2184,7 +2287,7 @@ def create_sample_properties() -> List[PropertySchema]:
             id="rotation",
             label="Rotation",
             property_type=PropertyType.VECTOR3,
-            value=[0, 0, 0],
+            value=[0.00, 0.00, 0.00],
             section="Transform",
             order=1,
             component_labels=["X", "Y", "Z"],
@@ -2195,7 +2298,7 @@ def create_sample_properties() -> List[PropertySchema]:
             id="scale",
             label="Scale",
             property_type=PropertyType.VECTOR3,
-            value=[1, 1, 1],
+            value=[1.00, 1.00, 1.00],
             section="Transform",
             order=2,
             component_labels=["X", "Y", "Z"],
@@ -2322,9 +2425,9 @@ class SampleObject:
     def __init__(self):
         self.name = "Sample Object"
         self.enabled = True
-        self.position = [0, 0, 0]
-        self.rotation = [0, 0, 0]
-        self.scale = [1, 1, 1]
+        self.position = [0.00, 0.00, 0.00]
+        self.rotation = [0.00, 0.00, 0.00]
+        self.scale = [1.00, 1.00, 1.00]
         self.color = pygame.Color(255, 255, 255)
         self.opacity = 1.0
         self.material = "Default"
@@ -2477,23 +2580,119 @@ def main():
         y_offset = 100
         info_font = pygame.font.Font(None, 18)
 
-        # Show some key properties
-        key_props = ["name", "position", "color", "material", "mass"]
-        for prop_id in key_props:
+        # Show ALL properties instead of just key ones
+        all_properties = property_inspector.properties
+        for prop_id, prop_schema in all_properties.items():
             value = property_inspector.get_property_value(prop_id)
             if value is not None:
+                # Format the value for display
                 if isinstance(value, list):
-                    value_str = f"[{', '.join(f'{v:.1f}' if isinstance(v, float) else str(v) for v in value)}]"
+                    if all(isinstance(v, (int, float)) for v in value):
+                        value_str = f"[{', '.join(f'{v:.2f}' if isinstance(v, float) else str(v) for v in value)}]"
+                    else:
+                        value_str = f"[{', '.join(str(v) for v in value)}]"
                 elif isinstance(value, float):
-                    value_str = f"{value:.2f}"
+                    value_str = f"{value:.3f}"
                 elif isinstance(value, pygame.Color):
-                    value_str = f"RGB({value.r}, {value.g}, {value.b})"
+                    if value.a < 255:
+                        value_str = f"RGBA({value.r}, {value.g}, {value.b}, {value.a})"
+                    else:
+                        value_str = f"RGB({value.r}, {value.g}, {value.b})"
+                elif isinstance(value, bool):
+                    value_str = "True" if value else "False"
                 else:
                     value_str = str(value)
 
-                text = info_font.render(f"{prop_id}: {value_str}", True, pygame.Color(200, 200, 200))
+                # Show property label and value
+                display_text = f"{prop_schema.label}: {value_str}"
+
+                # Add section info for better organization
+                section_name = prop_schema.section or "General"
+                if prop_schema.is_advanced():
+                    display_text += " (Advanced)"
+                if prop_schema.is_readonly():
+                    display_text += " (Read-only)"
+
+                # Color code by section
+                text_color = pygame.Color(200, 200, 200)  # Default
+                if section_name == "Transform":
+                    text_color = pygame.Color(150, 255, 150)  # Green
+                elif section_name == "Rendering":
+                    text_color = pygame.Color(255, 200, 150)  # Orange
+                elif section_name == "Physics":
+                    text_color = pygame.Color(150, 200, 255)  # Blue
+                elif section_name == "Advanced":
+                    text_color = pygame.Color(255, 150, 255)  # Magenta
+
+                # Dim readonly properties
+                if prop_schema.is_readonly():
+                    text_color = pygame.Color(text_color.r // 2, text_color.g // 2, text_color.b // 2)
+
+                text = info_font.render(display_text, True, text_color)
                 screen.blit(text, (500, y_offset))
-                y_offset += 25
+                y_offset += 22
+
+        # Add section headers for better organization
+        section_offsets = {}
+        current_y = 100
+        sections_order = ["General", "Transform", "Rendering", "Physics", "Advanced"]
+
+        # Draw section-organized view on the right side
+        section_x = 750
+        section_y = 100
+        section_font = pygame.font.Font(None, 20)
+        property_font = pygame.font.Font(None, 16)
+
+        for section_name in sections_order:
+            # Check if we have properties in this section
+            section_props = [prop for prop in all_properties.values() if (prop.section or "General") == section_name]
+            if not section_props:
+                continue
+
+            # Draw section header
+            section_color = pygame.Color(255, 255, 255)
+            section_text = section_font.render(f"=== {section_name} ===", True, section_color)
+            screen.blit(section_text, (section_x, section_y))
+            section_y += 25
+
+            # Draw properties in this section
+            for prop in sorted(section_props, key=lambda p: p.order):
+                if prop.is_hidden() or (prop.is_advanced() and not show_advanced):
+                    continue
+
+                value = property_inspector.get_property_value(prop.id)
+                if value is not None:
+                    # Format value
+                    if isinstance(value, list):
+                        if all(isinstance(v, (int, float)) for v in value):
+                            value_str = f"[{', '.join(f'{v:.2f}' if isinstance(v, float) else str(v) for v in value)}]"
+                        else:
+                            value_str = f"[{', '.join(str(v) for v in value)}]"
+                    elif isinstance(value, float):
+                        value_str = f"{value:.3f}"
+                    elif isinstance(value, pygame.Color):
+                        value_str = f"#{value.r:02x}{value.g:02x}{value.b:02x}"
+                        if value.a < 255:
+                            value_str += f"{value.a:02x}"
+                    elif isinstance(value, bool):
+                        value_str = "Yes" if value else "No"
+                    else:
+                        value_str = str(value)[:30]  # Truncate long strings
+
+                    display_text = f"  {prop.label}: {value_str}"
+
+                    # Color based on property state
+                    prop_color = pygame.Color(180, 180, 180)
+                    if prop.is_readonly():
+                        prop_color = pygame.Color(120, 120, 120)
+                    elif prop.is_advanced():
+                        prop_color = pygame.Color(200, 150, 200)
+
+                    prop_text = property_font.render(display_text, True, prop_color)
+                    screen.blit(prop_text, (section_x, section_y))
+                    section_y += 18
+
+            section_y += 10  # Extra space between sections
 
         # Draw validation status
         errors = property_inspector.validate_all_properties()
