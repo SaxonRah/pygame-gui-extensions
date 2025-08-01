@@ -34,7 +34,7 @@ A syntax-highlighted text editor:
 - Find/replace with regex support
 - Bracket matching and indentation guides
 - Multiple language support (Python, JSON, etc.)
-- Integration with your property inspector for script editing
+- Integration with the property inspector for script editing
 
 ### 3. **Docking System**
 A framework for dockable panels:
@@ -42,7 +42,7 @@ A framework for dockable panels:
 - Tabbed panel groups
 - Splitter controls for resizing
 - Save/restore layouts
-- Would make your hierarchy + property panels even more useful
+- Would make the hierarchy + property panels even more useful
 
 ## **Medium Impact, Lower Complexity**
 
@@ -52,7 +52,7 @@ Enhanced file system navigation:
 - File type filtering and search
 - Breadcrumb navigation
 - Recent files and bookmarks
-- Integration with your hierarchy panel for project files
+- Integration with the hierarchy panel for project files
 
 ### 5. **Data Grid/Table Panel**
 Spreadsheet-like component:
@@ -60,7 +60,7 @@ Spreadsheet-like component:
 - In-cell editing with validation
 - Row selection and highlighting
 - Export to CSV/JSON
-- Perfect complement to your property inspector
+- Perfect complement to the property inspector
 
 ### 6. **Tool Palette Panel**
 Organized tool selection:
@@ -77,7 +77,7 @@ Visual programming interface:
 - Bezier curve connections
 - Node libraries and search
 - Zoom/pan navigation
-- Would pair excellently with your property inspector
+- Would pair excellently with the property inspector
 
 ### 8. **Timeline/Animation Panel**
 For keyframe animation:
@@ -85,7 +85,7 @@ For keyframe animation:
 - Keyframe editing and curves
 - Layer management
 - Playback controls
-- Integration with your hierarchy for animated objects
+- Integration with the hierarchy for animated objects
 
 ### 9. **Chart/Graph Panel**
 Data visualization component:
