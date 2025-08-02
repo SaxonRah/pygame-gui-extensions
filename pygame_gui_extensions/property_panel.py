@@ -1178,7 +1178,7 @@ class VectorPropertyRenderer(PropertyRenderer):
         return False
 
 
-class PropertyInspectorPanel(UIElement):
+class PropertyPanel(UIElement):
     """Main property inspector panel widget"""
 
     def __init__(self, relative_rect: pygame.Rect,
@@ -2460,7 +2460,7 @@ def main():
     config.show_tooltips = True
 
     # Create property inspector
-    property_inspector = PropertyInspectorPanel(
+    property_inspector = PropertyPanel(
         pygame.Rect(50, 50, 400, 600),
         manager,
         config,

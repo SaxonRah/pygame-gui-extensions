@@ -43,31 +43,31 @@ class ZoomMode(Enum):
     CUSTOM = "custom"
 
 
-class ViewportInfo:
+class NavigatorViewport:
     """Information about the current viewport"""
     # Content coordinates (what part of the content is visible)
 
     def __init__(self,
-                 given_content_x: float = 0.0, given_content_y: float = 0.0,
-                 given_content_width: float = 100.0, given_content_height: float = 100.0,
-                 given_zoom: float = 1.0,
-                 given_total_content_width: float = 100.0, given_total_content_height: float = 100.0,
-                 given_display_mode: NavigatorMode = NavigatorMode.THUMBNAIL):
+                 content_x: float = 0.0, content_y: float = 0.0,
+                 content_width: float = 100.0, content_height: float = 100.0,
+                 zoom: float = 1.0,
+                 total_content_width: float = 100.0, total_content_height: float = 100.0,
+                 display_mode: NavigatorMode = NavigatorMode.THUMBNAIL):
 
-        self.content_x: float = given_content_x
-        self.content_y: float = given_content_y
-        self.content_width: float = given_content_width
-        self.content_height: float = given_content_height
+        self.content_x: float = content_x
+        self.content_y: float = content_y
+        self.content_width: float = content_width
+        self.content_height: float = content_height
 
         # Zoom level (1.0 = 100%)
-        self.zoom: float = given_zoom
+        self.zoom: float = zoom
 
         # Total content size
-        self.total_content_width: float = given_total_content_width
-        self.total_content_height: float = given_total_content_height
+        self.total_content_width: float = total_content_width
+        self.total_content_height: float = total_content_height
 
         # Display mode
-        self.display_mode: NavigatorMode = given_display_mode
+        self.display_mode: NavigatorMode = display_mode
 
     def get_center(self) -> Tuple[float, float]:
         """Get viewport center in content coordinates"""
@@ -109,7 +109,7 @@ class ContentProvider(Protocol):
         ...
 
     def render_thumbnail(self, surface: pygame.Surface, thumbnail_rect: pygame.Rect,
-                         viewport: ViewportInfo) -> None:
+                         viewport: NavigatorViewport) -> None:
         """Render content thumbnail to the given surface and rect"""
         ...
 
@@ -154,7 +154,7 @@ class NavigatorConfig:
     max_thumbnail_size: Tuple[int, int] = (512, 512)
 
     # Custom drawing
-    custom_draw_function: Optional[Callable[[pygame.Surface, pygame.Rect, ViewportInfo], None]] = None
+    custom_draw_function: Optional[Callable[[pygame.Surface, pygame.Rect, NavigatorViewport], None]] = None
 
 
 class ImageContentProvider:
@@ -222,7 +222,7 @@ class NodeGraphContentProvider:
             self.connections.append((from_node, to_node))
 
     def render_thumbnail(self, surface: pygame.Surface, thumbnail_rect: pygame.Rect,
-                         viewport: ViewportInfo) -> None:
+                         viewport: NavigatorViewport) -> None:
         if not self.nodes:
             return
 
@@ -311,7 +311,7 @@ class FunctionContentProvider:
     """Content provider using custom drawing function"""
 
     def __init__(self, content_size: Tuple[float, float],
-                 draw_function: Callable[[pygame.Surface, pygame.Rect, ViewportInfo], None]):
+                 draw_function: Callable[[pygame.Surface, pygame.Rect, NavigatorViewport], None]):
         self.content_size = content_size
         self.draw_function = draw_function
         self.selection_bounds: Optional[pygame.Rect] = None
@@ -320,7 +320,7 @@ class FunctionContentProvider:
         return self.content_size
 
     def render_thumbnail(self, surface: pygame.Surface, thumbnail_rect: pygame.Rect,
-                         viewport: ViewportInfo) -> None:
+                         viewport: NavigatorViewport) -> None:
         self.draw_function(surface, thumbnail_rect, viewport)
 
     def get_selection_bounds(self) -> Optional[pygame.Rect]:
@@ -448,7 +448,7 @@ class NavigatorPanel(UIElement):
     def __init__(self, relative_rect: pygame.Rect,
                  manager: pygame_gui.UIManager,
                  content_provider: ContentProvider,
-                 viewport: ViewportInfo = None,
+                 viewport: NavigatorViewport = None,
                  config: NavigatorConfig = None,
                  container: IContainerLikeInterface = None,
                  object_id: Union[ObjectID, str, None] = None,
@@ -467,7 +467,7 @@ class NavigatorPanel(UIElement):
                          anchors=anchors, object_id=self._object_id)
 
         self.content_provider = content_provider
-        self.viewport = viewport or ViewportInfo()
+        self.viewport = viewport or NavigatorViewport()
         self.config = config or NavigatorConfig()
 
         # Initialize viewport size based on content
@@ -633,7 +633,7 @@ class NavigatorPanel(UIElement):
                 self.config.custom_draw_function(self.image, self.thumbnail_rect, self.viewport)
             else:
                 # Create a copy of viewport with mode information
-                temp_viewport = ViewportInfo(
+                temp_viewport = NavigatorViewport(
                     self.viewport.content_x, self.viewport.content_y,
                     self.viewport.content_width, self.viewport.content_height,
                     self.viewport.zoom,
@@ -841,7 +841,7 @@ class NavigatorPanel(UIElement):
                 if self.config.drag_to_pan:
                     self.is_dragging = True
                     self.drag_start_pos = pos
-                    self.drag_start_viewport = ViewportInfo(
+                    self.drag_start_viewport = NavigatorViewport(
                         self.viewport.content_x, self.viewport.content_y,
                         self.viewport.content_width, self.viewport.content_height,
                         self.viewport.zoom,
@@ -1060,13 +1060,13 @@ class NavigatorPanel(UIElement):
         self.cache_invalid = True
         self._rebuild_image()
 
-    def set_viewport(self, viewport: ViewportInfo):
+    def set_viewport(self, viewport: NavigatorViewport):
         """Set viewport information"""
         self.viewport = viewport
         self._fire_viewport_changed_event()
         self._rebuild_image()
 
-    def get_viewport(self) -> ViewportInfo:
+    def get_viewport(self) -> NavigatorViewport:
         """Get current viewport information"""
         return self.viewport
 
@@ -1243,12 +1243,12 @@ def main():
     main_content_height = 350  # Height of main content area
     initial_zoom = 1.0
 
-    viewport = ViewportInfo(
-        given_content_x=100, given_content_y=100,
-        given_content_width=main_content_width / initial_zoom,
-        given_content_height=main_content_height / initial_zoom,
-        given_zoom=initial_zoom,
-        given_total_content_width=content_w, given_total_content_height=content_h
+    viewport = NavigatorViewport(
+        content_x=100, content_y=100,
+        content_width=main_content_width / initial_zoom,
+        content_height=main_content_height / initial_zoom,
+        zoom=initial_zoom,
+        total_content_width=content_w, total_content_height=content_h
     )
 
     # Configure navigator
@@ -1269,11 +1269,11 @@ def main():
     )
 
     # Create a second navigator for comparison with proper viewport
-    viewport2 = ViewportInfo(
-        given_content_x=0, given_content_y=0,
-        given_content_width=content_w * 0.5, given_content_height=content_h * 0.5,  # Show 50% of content
-        given_zoom=1.0,
-        given_total_content_width=content_w, given_total_content_height=content_h
+    viewport2 = NavigatorViewport(
+        content_x=0, content_y=0,
+        content_width=content_w * 0.5, content_height=content_h * 0.5,  # Show 50% of content
+        zoom=1.0,
+        total_content_width=content_w, total_content_height=content_h
     )
 
     config2 = NavigatorConfig()
@@ -1337,9 +1337,9 @@ def main():
                 elif event.key == pygame.K_r:
                     # Reset viewport
                     if using_node_content:
-                        new_viewport = ViewportInfo(0, 0, 600, 400, 1.0, 1200, 800)
+                        new_viewport = NavigatorViewport(0, 0, 600, 400, 1.0, 1200, 800)
                     else:
-                        new_viewport = ViewportInfo(100, 100, 400, 300, 1.0, 800, 600)
+                        new_viewport = NavigatorViewport(100, 100, 400, 300, 1.0, 800, 600)
                     navigator.set_viewport(new_viewport)
                     print("Reset viewport")
 
