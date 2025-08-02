@@ -9,14 +9,30 @@ Well-built GUI widgets built on top of pygame-ce and pygame-gui for building too
 This extension is being built to facilitate [PySpine](https://github.com/SaxonRah/PySpine) and [StoryForge](https://github.com/SaxonRah/StoryForge). 
 
 ---
-
+# Completed Version 0.1 Panels
+### **Hierarchy Panel**
+Tree-view widget for organizing data structures:
+- Expandable/collapsible folder and item nodes
+- Drag and drop reordering with visual feedback
+- Custom icons and theming support
+- Mouse and keyboard navigation
+- Events for selection, expansion, and context menus
+- Perfect for file explorers, scene graphs, or project trees
 ![Hierarchy Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/HierarchyPanel.png "Hierarchy Panel")
 
+### **Property Inspector Panel**
+Comprehensive property editing interface:
+- Multiple property types (text, numbers, colors, vectors, dropdowns)
+- Collapsible sections with validation
+- Live editing with real-time feedback
+- Advanced/basic property filtering
+- Rich controls including color pickers and sliders
+- Essential companion to hierarchy panels for object editing
 ![Property Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/PropertyPanel.png "Property Panel")
 
 ---
 
-# Work in Progess
+# Work in Progess Panels
 ### 7. **Node Editor Panel**
 Visual programming interface:
 - Draggable nodes with input/output sockets
