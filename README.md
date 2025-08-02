@@ -16,10 +16,39 @@ This extension is being built to facilitate [PySpine](https://github.com/SaxonRa
 
 ---
 
+# Work in Progess
+### 7. **Node Editor Panel**
+Visual programming interface:
+- Draggable nodes with input/output sockets
+- Bezier curve connections
+- Node libraries and search
+- Zoom/pan navigation
+- Would pair excellently with the property inspector
+### 8. **Timeline/Animation Panel**
+For keyframe animation:
+- Scrubbing timeline with frame markers
+- Keyframe editing and curves
+- Layer management
+- Playback controls
+- Integration with the hierarchy for animated objects
+### 10. **Asset Browser Panel**
+Media asset management:
+- Preview thumbnails for images/models
+- Metadata display and editing
+- Import/export functionality
+- Search and tagging
+- Drag-and-drop to hierarchy
+### 11. **Mini-map/Navigator Panel**
+For large content areas:
+- Thumbnail view of large canvases
+- Viewport indicator and navigation
+- Zoom controls
+- Works great with node editors or large hierarchies
+
+---
+
 ## Future Panels
-
 ## **High Impact, Medium Complexity**
-
 ### 1. **Console/Terminal Panel**
 A powerful console for logging, command execution, and REPL functionality:
 - Command history with up/down arrows
@@ -27,7 +56,6 @@ A powerful console for logging, command execution, and REPL functionality:
 - Scrollable output with filtering
 - Command aliases and macros
 - Integration with Python `exec()` for live scripting
-
 ### 2. **Code Editor Panel** 
 A syntax-highlighted text editor:
 - Line numbers and folding
@@ -35,7 +63,6 @@ A syntax-highlighted text editor:
 - Bracket matching and indentation guides
 - Multiple language support (Python, JSON, etc.)
 - Integration with the property inspector for script editing
-
 ### 3. **Docking System**
 A framework for dockable panels:
 - Drag-and-drop panel arrangement
@@ -45,7 +72,6 @@ A framework for dockable panels:
 - Would make the hierarchy + property panels even more useful
 
 ## **Medium Impact, Lower Complexity**
-
 ### 4. **File Browser Panel**
 Enhanced file system navigation:
 - Thumbnail previews for images
@@ -53,7 +79,6 @@ Enhanced file system navigation:
 - Breadcrumb navigation
 - Recent files and bookmarks
 - Integration with the hierarchy panel for project files
-
 ### 5. **Data Grid/Table Panel**
 Spreadsheet-like component:
 - Sortable columns with custom comparers
@@ -61,7 +86,6 @@ Spreadsheet-like component:
 - Row selection and highlighting
 - Export to CSV/JSON
 - Perfect complement to the property inspector
-
 ### 6. **Tool Palette Panel**
 Organized tool selection:
 - Categorized tool groups
@@ -70,23 +94,6 @@ Organized tool selection:
 - Tool descriptions and shortcuts
 
 ## **High Impact, High Complexity**
-
-### 7. **Node Editor Panel**
-Visual programming interface:
-- Draggable nodes with input/output sockets
-- Bezier curve connections
-- Node libraries and search
-- Zoom/pan navigation
-- Would pair excellently with the property inspector
-
-### 8. **Timeline/Animation Panel**
-For keyframe animation:
-- Scrubbing timeline with frame markers
-- Keyframe editing and curves
-- Layer management
-- Playback controls
-- Integration with the hierarchy for animated objects
-
 ### 9. **Chart/Graph Panel**
 Data visualization component:
 - Line charts, bar charts, pie charts
@@ -96,25 +103,11 @@ Data visualization component:
 - Great for debugging and analytics
 
 ## **Specialized**
-
-### 10. **Asset Browser Panel**
-Media asset management:
-- Preview thumbnails for images/models
-- Metadata display and editing
-- Import/export functionality
-- Search and tagging
-- Drag-and-drop to hierarchy
-
-### 11. **Mini-map/Navigator Panel**
-For large content areas:
-- Thumbnail view of large canvases
-- Viewport indicator and navigation
-- Zoom controls
-- Works great with node editors or large hierarchies
-
 ### 12. **Log Viewer Panel**
 Advanced logging interface:
 - Filtering by level/category
 - Search and highlighting
 - Timestamped entries
 - Export and clearing functions
+
+---
