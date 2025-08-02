@@ -24,6 +24,8 @@ Visual programming interface:
 - Node libraries and search
 - Zoom/pan navigation
 - Would pair excellently with the property inspector
+![Node Editor Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NodeEditorPanel.png "Node Editor Panel")
+
 ### 8. **Timeline/Animation Panel**
 For keyframe animation:
 - Scrubbing timeline with frame markers
@@ -31,6 +33,8 @@ For keyframe animation:
 - Layer management
 - Playback controls
 - Integration with the hierarchy for animated objects
+![Timeline Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/TimelinePanel.png "Timeline Panel")
+
 ### 10. **Asset Browser Panel**
 Media asset management:
 - Preview thumbnails for images/models
@@ -38,12 +42,15 @@ Media asset management:
 - Import/export functionality
 - Search and tagging
 - Drag-and-drop to hierarchy
+![Asset Browser Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/AssetBrowserPanel.png "Asset Browser Panel")
+
 ### 11. **Mini-map/Navigator Panel**
 For large content areas:
 - Thumbnail view of large canvases
 - Viewport indicator and navigation
 - Zoom controls
 - Works great with node editors or large hierarchies
+![Navigator Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NavigatorPanel.png "Navigator Panel")
 
 ---
 

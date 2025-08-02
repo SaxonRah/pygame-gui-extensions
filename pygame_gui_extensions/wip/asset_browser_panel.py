@@ -263,7 +263,7 @@ class AssetPreviewGenerator:
     """Generates thumbnails and previews for assets"""
 
     def __init__(self, cache_dir: Path = None, thumbnail_size: Tuple[int, int] = DEFAULT_THUMBNAIL_SIZE):
-        self.cache_dir = cache_dir or Path("wip\\asset_cache")
+        self.cache_dir = cache_dir or Path("asset_cache")
         self.thumbnail_size = thumbnail_size
         self.cache_dir.mkdir(exist_ok=True)
 
