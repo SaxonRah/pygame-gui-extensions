@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import math
 import time as time_module
+import copy
 
 try:
     from pygame_gui.core.interfaces.gui_font_interface import IGUIFontInterface
@@ -14,20 +15,6 @@ except ImportError:
     IGUIFontInterface = None
 
 TIMELINE_DEBUG = False
-
-# Constants
-FRAME_HEIGHT = 20
-LAYER_HEIGHT = 40
-SCRUBBER_HEIGHT = 30
-CONTROLS_HEIGHT = 35
-KEYFRAME_SIZE = 8
-PLAYHEAD_WIDTH = 2
-ZOOM_SENSITIVITY = 0.1
-MIN_ZOOM = 0.1
-MAX_ZOOM = 10.0
-DEFAULT_FPS = 30
-MIN_FPS = 1
-MAX_FPS = 120
 
 # Define custom pygame-gui events
 UI_TIMELINE_FRAME_CHANGED = pygame.USEREVENT + 100
@@ -78,6 +65,152 @@ class KeyframeFlags(Enum):
     SELECTED = "selected"
     TANGENT_BROKEN = "tangent_broken"
     AUTO_TANGENT = "auto_tangent"
+
+
+@dataclass
+class TimelineLayoutConfig:
+    """Layout and spacing configuration for timeline panel"""
+    # Panel dimensions
+    frame_height: int = 20
+    layer_height: int = 40
+    scrubber_height: int = 30
+    controls_height: int = 35
+    layer_label_width: int = 150
+
+    # Timeline elements
+    keyframe_size: int = 8
+    playhead_width: int = 2
+    major_tick_height: int = 15
+    minor_tick_height: int = 8
+
+    # Visual spacing
+    layer_padding: int = 2
+    control_button_spacing: int = 4
+    timeline_margin: int = 5
+
+    # Tick marks
+    major_tick_interval: int = 10
+    minor_tick_interval: int = 5
+
+    # Borders and lines
+    border_width: int = 1
+    focus_border_width: int = 2
+    grid_line_width: int = 1
+
+    # Fallback settings
+    fallback_font_size: int = 10
+
+
+@dataclass
+class TimelineInteractionConfig:
+    """Interaction and timing configuration"""
+    # Zoom settings
+    zoom_sensitivity: float = 0.1
+    min_zoom: float = 0.1
+    max_zoom: float = 10.0
+
+    # Scroll settings
+    scroll_speed: int = 20
+    auto_scroll_margin: float = 0.1  # Percentage of visible area
+
+    # Drag settings
+    drag_threshold: int = 5
+    keyframe_click_tolerance: int = 12
+
+    # Timing
+    double_click_time: int = 500  # milliseconds
+    cursor_blink_time: float = 0.5  # seconds
+
+    # Playback
+    default_fps: float = 30.0
+    min_fps: float = 1.0
+    max_fps: float = 120.0
+
+
+@dataclass
+class TimelineBehaviorConfig:
+    """Behavior configuration for timeline panel"""
+    # Display options
+    show_frame_numbers: bool = True
+    show_time_code: bool = True
+    show_layer_names: bool = True
+    show_interpolation_curves: bool = False
+    show_grid: bool = True
+
+    # Interaction behavior
+    snap_to_frames: bool = True
+    auto_scroll_on_playback: bool = True
+    zoom_to_fit_on_clip_change: bool = True
+    multi_select_keyframes: bool = True
+
+    # Playback behavior
+    loop_by_default: bool = False
+    scrub_while_dragging: bool = True
+    preview_while_scrubbing: bool = True
+
+    # Keyframe behavior
+    auto_tangents: bool = True
+    keyframe_shape: str = "diamond"  # diamond, circle, square
+    color_keyframes_by_interpolation: bool = True
+
+    # Performance
+    cache_rendered_elements: bool = True
+    lazy_redraw: bool = True
+    max_visible_keyframes: int = 1000
+
+    # Integration
+    sync_with_property_panel: bool = True
+    sync_with_hierarchy_panel: bool = True
+
+
+@dataclass
+class TimelineConfig:
+    """Complete configuration for the timeline panel"""
+    # Sub-configurations
+    layout: TimelineLayoutConfig = field(default_factory=TimelineLayoutConfig)
+    interaction: TimelineInteractionConfig = field(default_factory=TimelineInteractionConfig)
+    behavior: TimelineBehaviorConfig = field(default_factory=TimelineBehaviorConfig)
+
+    # Convenience properties for backward compatibility
+    @property
+    def frame_height(self) -> int:
+        return self.layout.frame_height
+
+    @property
+    def layer_height(self) -> int:
+        return self.layout.layer_height
+
+    @property
+    def scrubber_height(self) -> int:
+        return self.layout.scrubber_height
+
+    @property
+    def controls_height(self) -> int:
+        return self.layout.controls_height
+
+    @property
+    def keyframe_size(self) -> int:
+        return self.layout.keyframe_size
+
+    @property
+    def show_frame_numbers(self) -> bool:
+        return self.behavior.show_frame_numbers
+
+    @property
+    def show_time_code(self) -> bool:
+        return self.behavior.show_time_code
+
+    @property
+    def snap_to_frames(self) -> bool:
+        return self.behavior.snap_to_frames
+
+    @property
+    def auto_scroll_on_playback(self) -> bool:
+        return self.behavior.auto_scroll_on_playback
+
+    @property
+    def default_fps(self) -> float:
+        return self.interaction.default_fps
 
 
 @dataclass
@@ -262,7 +395,7 @@ class AnimationLayer:
 
     # Visual properties
     color: pygame.Color = field(default_factory=lambda: pygame.Color(150, 150, 150))
-    height: int = LAYER_HEIGHT
+    height: int = 40
 
     # Target object reference (optional)
     target_object: Any = None
@@ -316,7 +449,7 @@ class AnimationClip:
 
     # Timeline settings
     length: int = 300  # frames
-    fps: float = DEFAULT_FPS
+    fps: float = 30.0
     start_frame: int = 0
 
     # Playback settings
@@ -356,89 +489,164 @@ class AnimationClip:
         return time_seconds * self.fps
 
 
-@dataclass
-class TimelineConfig:
-    """Configuration for the timeline panel"""
-    # Display settings
-    frame_height: int = FRAME_HEIGHT
-    layer_height: int = LAYER_HEIGHT
-    scrubber_height: int = SCRUBBER_HEIGHT
-    controls_height: int = CONTROLS_HEIGHT
+class TimelineThemeManager:
+    """Manages theming for the timeline panel"""
 
-    # Timeline settings
-    show_frame_numbers: bool = True
-    show_time_code: bool = True
-    major_tick_interval: int = 10
-    minor_tick_interval: int = 5
+    def __init__(self, ui_manager: pygame_gui.UIManager, element_ids: List[str]):
+        self.ui_manager = ui_manager
+        self.element_ids = element_ids
+        self.themed_colors = {}
+        self.themed_font = None
+        self._update_theme_data()
 
-    # Keyframe settings
-    keyframe_size: int = KEYFRAME_SIZE
-    keyframe_shape: str = "diamond"  # diamond, circle, square
-    show_interpolation_curves: bool = False
+    def _update_theme_data(self):
+        """Update theme-dependent data with comprehensive fallbacks"""
+        # Default color mappings with fallbacks
+        color_mappings = {
+            'timeline_bg': pygame.Color(40, 40, 40),
+            'controls_bg': pygame.Color(35, 35, 35),
+            'scrubber_bg': pygame.Color(45, 45, 45),
+            'layer_bg': pygame.Color(50, 50, 50),
+            'layer_bg_alt': pygame.Color(45, 45, 45),
+            'layer_label_bg': pygame.Color(55, 55, 55),
+            'normal_text': pygame.Color(255, 255, 255),
+            'disabled_text': pygame.Color(150, 150, 150),
+            'layer_text': pygame.Color(220, 220, 220),
+            'grid_line': pygame.Color(60, 60, 60),
+            'major_tick': pygame.Color(200, 200, 200),
+            'minor_tick': pygame.Color(150, 150, 150),
+            'playhead': pygame.Color(255, 80, 80),
+            'playhead_handle': pygame.Color(255, 100, 100),
+            'selection': pygame.Color(100, 150, 255),
+            'selection_bg': pygame.Color(70, 130, 180),
+            'hover_bg': pygame.Color(60, 60, 60),
+            'focused_bg': pygame.Color(80, 120, 160),
+            'keyframe_linear': pygame.Color(100, 150, 255),
+            'keyframe_ease_in': pygame.Color(100, 255, 100),
+            'keyframe_ease_out': pygame.Color(255, 100, 100),
+            'keyframe_ease_in_out': pygame.Color(255, 150, 100),
+            'keyframe_step': pygame.Color(200, 200, 200),
+            'keyframe_bezier': pygame.Color(255, 100, 255),
+            'keyframe_smooth': pygame.Color(100, 255, 255),
+            'keyframe_selected': pygame.Color(255, 255, 100),
+            'keyframe_locked': pygame.Color(120, 120, 120),
+            'keyframe_outline': pygame.Color(20, 20, 20),
+            'button_bg': pygame.Color(60, 60, 60),
+            'button_hover': pygame.Color(80, 80, 80),
+            'button_pressed': pygame.Color(40, 40, 40),
+            'button_text': pygame.Color(255, 255, 255),
+            'border': pygame.Color(100, 100, 100),
+            'focus_border': pygame.Color(120, 160, 255),
+            'layer_border': pygame.Color(80, 80, 80),
+            'time_cursor': pygame.Color(255, 255, 255),
+        }
 
-    # Behavior
-    snap_to_frames: bool = True
-    auto_scroll_on_playback: bool = True
-    zoom_to_fit_on_clip_change: bool = True
+        try:
+            self.themed_colors = {}
+            theme = self.ui_manager.get_theme()
 
-    # Playback
-    default_fps: float = DEFAULT_FPS
-    loop_by_default: bool = False
+            for color_id, default_color in color_mappings.items():
+                try:
+                    if hasattr(theme, 'get_colour_or_gradient'):
+                        color = theme.get_colour_or_gradient(color_id, self.element_ids)
+                        self.themed_colors[color_id] = color if color else default_color
+                    else:
+                        self.themed_colors[color_id] = default_color
+                except Exception:
+                    self.themed_colors[color_id] = default_color
 
-    # Integration
-    sync_with_property_panel: bool = True
-    sync_with_hierarchy_panel: bool = True
+            # Get themed font
+            try:
+                if hasattr(theme, 'get_font'):
+                    self.themed_font = theme.get_font(self.element_ids)
+                else:
+                    raise Exception("No font method")
+            except Exception:
+                try:
+                    self.themed_font = pygame.font.SysFont('Arial', 10)
+                except:
+                    self.themed_font = pygame.font.Font(None, 10)
+
+        except Exception as e:
+            if TIMELINE_DEBUG:
+                print(f"Error getting theme data: {e}")
+            # Complete fallback
+            self.themed_colors = color_mappings
+            try:
+                self.themed_font = pygame.font.SysFont('Arial', 10)
+            except:
+                self.themed_font = pygame.font.Font(None, 10)
+
+    def rebuild_from_changed_theme_data(self):
+        """Called when theme data changes"""
+        self._update_theme_data()
+
+    def get_color(self, color_id: str, fallback: pygame.Color = None) -> pygame.Color:
+        """Get a themed color with fallback"""
+        return self.themed_colors.get(color_id, fallback or pygame.Color(255, 255, 255))
+
+    def get_font(self):
+        """Get the themed font"""
+        return self.themed_font
 
 
 class TimelineRenderer:
-    """Handles rendering of timeline elements"""
+    """Handles rendering of timeline elements with configuration support"""
 
-    def __init__(self, config: TimelineConfig):
+    def __init__(self, config: TimelineConfig, theme_manager: TimelineThemeManager):
         self.config = config
+        self.theme_manager = theme_manager
 
-    @staticmethod
-    def draw_timeline_background(surface: pygame.Surface, rect: pygame.Rect,
-                                 colors: Dict[str, pygame.Color]):
+    def draw_timeline_background(self, surface: pygame.Surface, rect: pygame.Rect):
         """Draw timeline background with grid"""
-        bg_color = colors.get('timeline_bg', pygame.Color(40, 40, 40))
+        bg_color = self.theme_manager.get_color('timeline_bg')
         surface.fill(bg_color)
 
-        # Draw frame grid (simplified for this implementation)
-        grid_color = colors.get('grid_line', pygame.Color(60, 60, 60))
+        if self.config.behavior.show_grid:
+            self._draw_grid(surface, rect)
 
-        # Vertical lines for frames (every 10 frames)
-        for i in range(0, rect.width, 50):  # Simplified spacing
-            pygame.draw.line(surface, grid_color, (i, 0), (i, rect.height))
+    def _draw_grid(self, surface: pygame.Surface, rect: pygame.Rect):
+        """Draw timeline grid lines"""
+        grid_color = self.theme_manager.get_color('grid_line')
+
+        # Simplified grid drawing - in a real implementation, this would be more sophisticated
+        spacing = 50  # pixels between grid lines
+        for x in range(0, rect.width, spacing):
+            pygame.draw.line(surface, grid_color, (x, 0), (x, rect.height),
+                             self.config.layout.grid_line_width)
 
     def draw_keyframe(self, surface: pygame.Surface, pos: Tuple[int, int],
-                      keyframe: Keyframe, colors: Dict[str, pygame.Color]):
+                      keyframe: Keyframe) -> pygame.Rect:
         """Draw a keyframe at specified position"""
-        # Defaults
-        size = self.config.keyframe_size
+        size = self.config.layout.keyframe_size
         x, y = pos
-        points = []
-        rect = pygame.Rect(x - size // 2, y - size // 2, size, size)
 
-        # Choose color based on keyframe state
+        # Choose color based on keyframe state and configuration
         if keyframe.is_selected():
-            color = colors.get('keyframe_selected', pygame.Color(255, 255, 100))
+            color = self.theme_manager.get_color('keyframe_selected')
         elif keyframe.is_locked():
-            color = colors.get('keyframe_locked', pygame.Color(150, 150, 150))
-        else:
+            color = self.theme_manager.get_color('keyframe_locked')
+        elif self.config.behavior.color_keyframes_by_interpolation:
             # Color by interpolation type
             color_map = {
-                InterpolationType.LINEAR: colors.get('keyframe_linear', pygame.Color(100, 150, 255)),
-                InterpolationType.EASE_IN: colors.get('keyframe_ease_in', pygame.Color(100, 255, 100)),
-                InterpolationType.EASE_OUT: colors.get('keyframe_ease_out', pygame.Color(255, 100, 100)),
-                InterpolationType.EASE_IN_OUT: colors.get('keyframe_ease_in_out', pygame.Color(255, 150, 100)),
-                InterpolationType.STEP: colors.get('keyframe_step', pygame.Color(200, 200, 200)),
-                InterpolationType.BEZIER: colors.get('keyframe_bezier', pygame.Color(255, 100, 255)),
-                InterpolationType.SMOOTH: colors.get('keyframe_smooth', pygame.Color(100, 255, 255)),
+                InterpolationType.LINEAR: 'keyframe_linear',
+                InterpolationType.EASE_IN: 'keyframe_ease_in',
+                InterpolationType.EASE_OUT: 'keyframe_ease_out',
+                InterpolationType.EASE_IN_OUT: 'keyframe_ease_in_out',
+                InterpolationType.STEP: 'keyframe_step',
+                InterpolationType.BEZIER: 'keyframe_bezier',
+                InterpolationType.SMOOTH: 'keyframe_smooth',
             }
-            color = color_map.get(keyframe.interpolation, pygame.Color(150, 150, 150))
+            color_key = color_map.get(keyframe.interpolation, 'keyframe_linear')
+            color = self.theme_manager.get_color(color_key)
+        else:
+            color = self.theme_manager.get_color('keyframe_linear')
 
-        # Draw keyframe shape
-        if self.config.keyframe_shape == "diamond":
+        # Draw keyframe shape based on configuration
+        shape = self.config.behavior.keyframe_shape
+        keyframe_rect = pygame.Rect(x - size // 2, y - size // 2, size, size)
+
+        if shape == "diamond":
             points = [
                 (x, y - size // 2),
                 (x + size // 2, y),
@@ -446,36 +654,52 @@ class TimelineRenderer:
                 (x - size // 2, y)
             ]
             pygame.draw.polygon(surface, color, points)
-        elif self.config.keyframe_shape == "circle":
-            pygame.draw.circle(surface, color, (x, y), size // 2)
-        else:  # square
-            rect = pygame.Rect(x - size // 2, y - size // 2, size, size)
-            pygame.draw.rect(surface, color, rect)
-
-        # Draw outline
-        outline_color = colors.get('keyframe_outline', pygame.Color(0, 0, 0))
-        if self.config.keyframe_shape == "diamond":
+            # Draw outline
+            outline_color = self.theme_manager.get_color('keyframe_outline')
             pygame.draw.polygon(surface, outline_color, points, 1)
-        elif self.config.keyframe_shape == "circle":
+        elif shape == "circle":
+            pygame.draw.circle(surface, color, (x, y), size // 2)
+            # Draw outline
+            outline_color = self.theme_manager.get_color('keyframe_outline')
             pygame.draw.circle(surface, outline_color, (x, y), size // 2, 1)
-        else:
-            pygame.draw.rect(surface, outline_color, rect, 1)
+        else:  # square
+            pygame.draw.rect(surface, color, keyframe_rect)
+            # Draw outline
+            outline_color = self.theme_manager.get_color('keyframe_outline')
+            pygame.draw.rect(surface, outline_color, keyframe_rect, 1)
 
-    @staticmethod
-    def draw_playhead(surface: pygame.Surface, x: int, rect: pygame.Rect,
-                      colors: Dict[str, pygame.Color]):
+        return keyframe_rect
+
+    def draw_playhead(self, surface: pygame.Surface, x: int, rect: pygame.Rect):
         """Draw playhead at specified x position"""
-        playhead_color = colors.get('playhead', pygame.Color(255, 0, 0))
-        pygame.draw.line(surface, playhead_color, (x, rect.top), (x, rect.bottom), PLAYHEAD_WIDTH)
+        playhead_color = self.theme_manager.get_color('playhead')
+        pygame.draw.line(surface, playhead_color, (x, rect.top), (x, rect.bottom),
+                         self.config.layout.playhead_width)
 
         # Draw playhead handle
+        handle_color = self.theme_manager.get_color('playhead_handle')
         handle_size = 8
         handle_rect = pygame.Rect(x - handle_size // 2, rect.top, handle_size, handle_size)
-        pygame.draw.rect(surface, playhead_color, handle_rect)
+        pygame.draw.rect(surface, handle_color, handle_rect)
+
+    def draw_layer_background(self, surface: pygame.Surface, rect: pygame.Rect,
+                              layer: AnimationLayer, is_alternate: bool = False):
+        """Draw layer background"""
+        if is_alternate:
+            bg_color = self.theme_manager.get_color('layer_bg_alt')
+        else:
+            bg_color = self.theme_manager.get_color('layer_bg')
+
+        surface.fill(bg_color)
+
+        # Draw layer border if configured
+        if hasattr(self.config.layout, 'show_layer_borders') and self.config.layout.show_layer_borders:
+            border_color = self.theme_manager.get_color('layer_border')
+            pygame.draw.rect(surface, border_color, rect, self.config.layout.border_width)
 
 
 class TimelinePanel(UIElement):
-    """Main timeline/animation panel widget"""
+    """Main timeline/animation panel widget with comprehensive configuration"""
 
     def __init__(self, relative_rect: pygame.Rect,
                  manager: pygame_gui.UIManager,
@@ -497,6 +721,12 @@ class TimelinePanel(UIElement):
                          anchors=anchors, object_id=self._object_id)
 
         self.config = config or TimelineConfig()
+
+        # Create theme manager
+        element_ids = ['timeline_panel']
+        if hasattr(self, 'object_ids') and self.object_ids:
+            element_ids.extend(self.object_ids)
+        self.theme_manager = TimelineThemeManager(manager, element_ids)
 
         # Animation data
         self.clip: Optional[AnimationClip] = None
@@ -520,22 +750,24 @@ class TimelinePanel(UIElement):
         self.drag_start_frame = 0.0
         self.hovered_keyframe: Optional[Tuple[str, str, int]] = None
         self.focused_layer: Optional[str] = None
+        self.is_panel_focused = False
 
         # Layout rects
         self.controls_rect = pygame.Rect(0, 0, 0, 0)
         self.scrubber_rect = pygame.Rect(0, 0, 0, 0)
         self.timeline_rect = pygame.Rect(0, 0, 0, 0)
         self.layers_rect = pygame.Rect(0, 0, 0, 0)
+        self.layer_labels_rect = pygame.Rect(0, 0, 0, 0)
 
         # Renderer
-        self.renderer = TimelineRenderer(self.config)
+        self.renderer = TimelineRenderer(self.config, self.theme_manager)
 
         # Integration callbacks
         self.frame_change_callback: Optional[Callable[[float], None]] = None
         self.keyframe_change_callback: Optional[Callable[[str, str, int, Any], None]] = None
 
-        # Theme data
-        self._update_theme_data()
+        # Performance tracking
+        self._last_rebuild_state = None
 
         # Create the image surface
         self.image = pygame.Surface(self.rect.size).convert()
@@ -545,11 +777,7 @@ class TimelinePanel(UIElement):
         self._rebuild_image()
 
     def _needs_rebuild(self) -> bool:
-        """Check if UI needs rebuilding"""
-        if not hasattr(self, '_last_rebuild_state'):
-            self._last_rebuild_state = None
-            return True
-
+        """Check if UI needs rebuilding with better performance tracking"""
         current_state = {
             'current_frame': self.current_frame,
             'zoom': self.zoom,
@@ -557,7 +785,11 @@ class TimelinePanel(UIElement):
             'scroll_y': self.scroll_y,
             'playback_state': self.playback_state,
             'clip_id': id(self.clip) if self.clip else None,
-            'selection_count': len(self.selection)
+            'selection_count': len(self.selection),
+            'rect_size': (self.rect.width, self.rect.height),
+            'layer_count': len(self.clip.layers) if self.clip else 0,
+            'hovered_keyframe': self.hovered_keyframe,
+            'panel_focused': self.is_panel_focused,
         }
 
         if current_state != self._last_rebuild_state:
@@ -566,120 +798,70 @@ class TimelinePanel(UIElement):
 
         return False
 
-    def _update_theme_data(self):
-        """Update theme-dependent data"""
-        self.themed_colors = {}
-
-        color_mappings = {
-            'timeline_bg': pygame.Color(40, 40, 40),
-            'controls_bg': pygame.Color(35, 35, 35),
-            'scrubber_bg': pygame.Color(45, 45, 45),
-            'layer_bg': pygame.Color(50, 50, 50),
-            'layer_bg_alt': pygame.Color(45, 45, 45),
-            'normal_text': pygame.Color(255, 255, 255),
-            'disabled_text': pygame.Color(150, 150, 150),
-            'grid_line': pygame.Color(60, 60, 60),
-            'major_tick': pygame.Color(200, 200, 200),
-            'minor_tick': pygame.Color(150, 150, 150),
-            'playhead': pygame.Color(255, 80, 80),
-            'selection': pygame.Color(100, 150, 255),
-            'keyframe_linear': pygame.Color(100, 150, 255),
-            'keyframe_ease_in': pygame.Color(100, 255, 100),
-            'keyframe_ease_out': pygame.Color(255, 100, 100),
-            'keyframe_ease_in_out': pygame.Color(255, 150, 100),
-            'keyframe_step': pygame.Color(200, 200, 200),
-            'keyframe_bezier': pygame.Color(255, 100, 255),
-            'keyframe_smooth': pygame.Color(100, 255, 255),
-            'keyframe_selected': pygame.Color(255, 255, 100),
-            'keyframe_locked': pygame.Color(120, 120, 120),
-            'keyframe_outline': pygame.Color(20, 20, 20),
-            'button_bg': pygame.Color(60, 60, 60),
-            'button_hover': pygame.Color(80, 80, 80),
-            'button_pressed': pygame.Color(40, 40, 40),
-            'border': pygame.Color(100, 100, 100),
-            'focus_border': pygame.Color(120, 160, 255),
-        }
-
-        try:
-            theme = self.ui_manager.get_theme()
-
-            for color_id, default_color in color_mappings.items():
-                try:
-                    if hasattr(theme, 'get_colour_or_gradient'):
-                        color = theme.get_colour_or_gradient(color_id, ['timeline_panel'])
-                        self.themed_colors[color_id] = color if color else default_color
-                    else:
-                        self.themed_colors[color_id] = default_color
-                except Exception:
-                    self.themed_colors[color_id] = default_color
-
-            # Get themed font
-            try:
-                if hasattr(theme, 'get_font'):
-                    self.themed_font = theme.get_font(['timeline_panel'])
-                else:
-                    raise Exception("No font method")
-            except Exception:
-                try:
-                    self.themed_font = pygame.font.SysFont('Arial', 10)
-                except:
-                    self.themed_font = pygame.font.Font(None, 10)
-
-        except Exception as e:
-            if TIMELINE_DEBUG:
-                print(f"Error getting theme data: {e}")
-            # Complete fallback
-            self.themed_colors = color_mappings
-            try:
-                self.themed_font = pygame.font.SysFont('Arial', 10)
-            except:
-                self.themed_font = pygame.font.Font(None, 10)
-
     def rebuild_from_changed_theme_data(self):
         """Called when theme data changes"""
-        self._update_theme_data()
+        self.theme_manager.rebuild_from_changed_theme_data()
+        self.renderer = TimelineRenderer(self.config, self.theme_manager)
+        self._last_rebuild_state = None  # Force rebuild
         self._rebuild_image()
 
     def _setup_layout(self):
-        """Setup layout rectangles"""
+        """Setup layout rectangles based on configuration"""
+        layout = self.config.layout
+
         self.controls_rect = pygame.Rect(
-            0, 0, self.rect.width, self.config.controls_height
+            0, 0, self.rect.width, layout.controls_height
         )
 
         self.scrubber_rect = pygame.Rect(
-            0, self.config.controls_height,
-            self.rect.width, self.config.scrubber_height
+            layout.layer_label_width, layout.controls_height,
+            self.rect.width - layout.layer_label_width, layout.scrubber_height
         )
 
+        timeline_y = layout.controls_height + layout.scrubber_height
+        timeline_height = self.rect.height - timeline_y
+
+        # Layer labels area
+        self.layer_labels_rect = pygame.Rect(
+            0, timeline_y,
+            layout.layer_label_width, timeline_height
+        )
+
+        # Main timeline area
         self.timeline_rect = pygame.Rect(
-            0, self.config.controls_height + self.config.scrubber_height,
-            self.rect.width,
-               self.rect.height - self.config.controls_height - self.config.scrubber_height
+            layout.layer_label_width, timeline_y,
+            self.rect.width - layout.layer_label_width, timeline_height
         )
 
         # Layers area within timeline
         self.layers_rect = self.timeline_rect.copy()
 
     def _rebuild_image(self):
-        """Rebuild the image surface"""
-        if not self._needs_rebuild():
-            return
+        """Rebuild the image surface with performance optimizations"""
+        if not self.config.behavior.lazy_redraw or self._needs_rebuild():
+            # Fill background
+            bg_color = self.theme_manager.get_color('timeline_bg')
+            self.image.fill(bg_color)
 
-        # Fill background
-        bg_color = self.themed_colors.get('timeline_bg', pygame.Color(40, 40, 40))
-        self.image.fill(bg_color)
+            # Draw components
+            self._draw_controls()
+            self._draw_scrubber()
+            self._draw_layer_labels()
+            self._draw_timeline()
 
-        # Draw components
-        self._draw_controls()
-        self._draw_scrubber()
-        self._draw_timeline()
+            # Draw border
+            border_color = self.theme_manager.get_color('border')
+            pygame.draw.rect(self.image, border_color, self.image.get_rect(),
+                             self.config.layout.border_width)
 
-        # Draw border
-        border_color = self.themed_colors.get('border', pygame.Color(100, 100, 100))
-        pygame.draw.rect(self.image, border_color, self.image.get_rect(), 1)
+            # Draw focus indicator
+            if self.is_panel_focused:
+                focus_color = self.theme_manager.get_color('focus_border')
+                pygame.draw.rect(self.image, focus_color, self.image.get_rect(),
+                                 self.config.layout.focus_border_width)
 
     def _draw_controls(self):
-        """Draw playback controls"""
+        """Draw playback controls with improved configuration support"""
         if self.controls_rect.height <= 0:
             return
 
@@ -689,13 +871,14 @@ class TimelinePanel(UIElement):
             return
 
         # Background
-        bg_color = self.themed_colors.get('controls_bg', pygame.Color(35, 35, 35))
+        bg_color = self.theme_manager.get_color('controls_bg')
         controls_surface.fill(bg_color)
 
-        # Draw playback buttons (simplified)
+        # Draw playback buttons
+        layout = self.config.layout
         button_size = min(24, self.controls_rect.height - 6)
         button_y = (self.controls_rect.height - button_size) // 2
-        button_spacing = button_size + 4
+        button_spacing = button_size + layout.control_button_spacing
 
         buttons = [
             ("<<", self._rewind_to_start),
@@ -710,20 +893,22 @@ class TimelinePanel(UIElement):
             button_rect = pygame.Rect(button_x, button_y, button_size, button_size)
 
             # Button background
-            button_color = self.themed_colors.get('button_bg', pygame.Color(60, 60, 60))
+            button_color = self.theme_manager.get_color('button_bg')
             pygame.draw.rect(controls_surface, button_color, button_rect)
 
             # Button border
-            border_color = self.themed_colors.get('border', pygame.Color(100, 100, 100))
-            pygame.draw.rect(controls_surface, border_color, button_rect, 1)
+            border_color = self.theme_manager.get_color('border')
+            pygame.draw.rect(controls_surface, border_color, button_rect, layout.border_width)
 
             # Button text
             try:
-                text_color = self.themed_colors.get('normal_text', pygame.Color(255, 255, 255))
-                if hasattr(self.themed_font, 'render_premul'):
-                    text_surface = self.themed_font.render_premul(button_text, text_color)
+                text_color = self.theme_manager.get_color('button_text')
+                font = self.theme_manager.get_font()
+
+                if hasattr(font, 'render_premul'):
+                    text_surface = font.render_premul(button_text, text_color)
                 else:
-                    text_surface = self.themed_font.render(button_text, True, text_color)
+                    text_surface = font.render(button_text, True, text_color)
 
                 text_rect = text_surface.get_rect(center=button_rect.center)
                 controls_surface.blit(text_surface, text_rect)
@@ -733,31 +918,44 @@ class TimelinePanel(UIElement):
             button_x += button_spacing
 
         # Draw frame/time display
-        display_x = button_x + 20
+        self._draw_time_display(controls_surface, button_x + 20)
+
+    def _draw_time_display(self, surface: pygame.Surface, x_offset: int):
+        """Draw frame and time information"""
         frame_text = f"Frame: {int(self.current_frame)}"
+
         if self.clip:
             time_text = f"Time: {self.clip.frame_to_time(self.current_frame):.2f}s"
             fps_text = f"FPS: {self.clip.fps:.1f}"
+            length_text = f"Length: {self.clip.length}"
         else:
             time_text = "Time: 0.00s"
-            fps_text = f"FPS: {self.config.default_fps:.1f}"
+            fps_text = f"FPS: {self.config.interaction.default_fps:.1f}"
+            length_text = "Length: 0"
+
+        text_info = []
+        if self.config.behavior.show_frame_numbers:
+            text_info.append(frame_text)
+        if self.config.behavior.show_time_code:
+            text_info.append(time_text)
+            text_info.append(fps_text)
+        text_info.append(length_text)
 
         try:
-            text_color = self.themed_colors.get('normal_text', pygame.Color(255, 255, 255))
+            text_color = self.theme_manager.get_color('normal_text')
+            font = self.theme_manager.get_font()
 
-            if hasattr(self.themed_font, 'render_premul'):
-                frame_surface = self.themed_font.render_premul(frame_text, text_color)
-                time_surface = self.themed_font.render_premul(time_text, text_color)
-                fps_surface = self.themed_font.render_premul(fps_text, text_color)
-            else:
-                frame_surface = self.themed_font.render(frame_text, True, text_color)
-                time_surface = self.themed_font.render(time_text, True, text_color)
-                fps_surface = self.themed_font.render(fps_text, True, text_color)
+            text_x = x_offset
+            text_y = (self.controls_rect.height - 12) // 2
 
-            text_y = (self.controls_rect.height - frame_surface.get_height()) // 2
-            controls_surface.blit(frame_surface, (display_x, text_y))
-            controls_surface.blit(time_surface, (display_x + 100, text_y))
-            controls_surface.blit(fps_surface, (display_x + 200, text_y))
+            for text in text_info:
+                if hasattr(font, 'render_premul'):
+                    text_surface = font.render_premul(text, text_color)
+                else:
+                    text_surface = font.render(text, True, text_color)
+
+                surface.blit(text_surface, (text_x, text_y))
+                text_x += text_surface.get_width() + 15
 
         except Exception:
             pass
@@ -773,7 +971,7 @@ class TimelinePanel(UIElement):
             return
 
         # Background
-        bg_color = self.themed_colors.get('scrubber_bg', pygame.Color(45, 45, 45))
+        bg_color = self.theme_manager.get_color('scrubber_bg')
         scrubber_surface.fill(bg_color)
 
         if not self.clip:
@@ -784,9 +982,12 @@ class TimelinePanel(UIElement):
         start_frame = self.scroll_x * frames_per_pixel
         end_frame = start_frame + self.scrubber_rect.width * frames_per_pixel
 
-        # Draw frame markers
-        major_color = self.themed_colors.get('major_tick', pygame.Color(200, 200, 200))
-        minor_color = self.themed_colors.get('minor_tick', pygame.Color(150, 150, 150))
+        # Draw frame markers with configuration
+        layout = self.config.layout
+        behavior = self.config.behavior
+
+        major_color = self.theme_manager.get_color('major_tick')
+        minor_color = self.theme_manager.get_color('minor_tick')
 
         for frame in range(int(start_frame), int(end_frame) + 1):
             if frame < 0 or frame > self.clip.length:
@@ -797,29 +998,17 @@ class TimelinePanel(UIElement):
                 continue
 
             # Major or minor tick
-            if frame % self.config.major_tick_interval == 0:
+            if frame % layout.major_tick_interval == 0:
                 color = major_color
-                height = self.scrubber_rect.height // 2
-                # Draw frame number
-                if self.config.show_frame_numbers:
-                    try:
-                        text_color = self.themed_colors.get('normal_text', pygame.Color(255, 255, 255))
-                        if hasattr(self.themed_font, 'render_premul'):
-                            text_surface = self.themed_font.render_premul(str(frame), text_color)
-                        else:
-                            text_surface = self.themed_font.render(str(frame), True, text_color)
+                height = layout.major_tick_height
 
-                        text_rect = text_surface.get_rect()
-                        text_rect.centerx = x
-                        text_rect.bottom = self.scrubber_rect.height - 2
+                # Draw frame number if configured
+                if behavior.show_frame_numbers:
+                    self._draw_frame_number(scrubber_surface, x, frame)
 
-                        if text_rect.left >= 0 and text_rect.right < self.scrubber_rect.width:
-                            scrubber_surface.blit(text_surface, text_rect)
-                    except Exception:
-                        pass
-            elif frame % self.config.minor_tick_interval == 0:
+            elif frame % layout.minor_tick_interval == 0:
                 color = minor_color
-                height = self.scrubber_rect.height // 3
+                height = layout.minor_tick_height
             else:
                 continue
 
@@ -829,8 +1018,92 @@ class TimelinePanel(UIElement):
         playhead_x = int((self.current_frame - start_frame) / frames_per_pixel)
         if 0 <= playhead_x < self.scrubber_rect.width:
             self.renderer.draw_playhead(scrubber_surface, playhead_x,
-                                        pygame.Rect(0, 0, self.scrubber_rect.width, self.scrubber_rect.height),
-                                        self.themed_colors)
+                                        pygame.Rect(0, 0, self.scrubber_rect.width,
+                                                    self.scrubber_rect.height))
+
+    def _draw_frame_number(self, surface: pygame.Surface, x: int, frame: int):
+        """Draw frame number at position"""
+        try:
+            text_color = self.theme_manager.get_color('normal_text')
+            font = self.theme_manager.get_font()
+
+            if hasattr(font, 'render_premul'):
+                text_surface = font.render_premul(str(frame), text_color)
+            else:
+                text_surface = font.render(str(frame), True, text_color)
+
+            text_rect = text_surface.get_rect()
+            text_rect.centerx = x
+            text_rect.bottom = self.scrubber_rect.height - 2
+
+            if text_rect.left >= 0 and text_rect.right < self.scrubber_rect.width:
+                surface.blit(text_surface, text_rect)
+        except Exception:
+            pass
+
+    def _draw_layer_labels(self):
+        """Draw layer labels area with configuration support"""
+        if self.layer_labels_rect.width <= 0 or not self.clip:
+            return
+
+        try:
+            labels_surface = self.image.subsurface(self.layer_labels_rect)
+        except (ValueError, pygame.error):
+            return
+
+        # Background
+        bg_color = self.theme_manager.get_color('layer_label_bg')
+        labels_surface.fill(bg_color)
+
+        if not self.config.behavior.show_layer_names:
+            return
+
+        # Draw layer names
+        layer_y = -self.scroll_y
+        for i, layer in enumerate(self.clip.layers):
+            if layer_y + layer.height < 0:
+                layer_y += layer.height
+                continue
+            if layer_y > self.layer_labels_rect.height:
+                break
+
+            layer_rect = pygame.Rect(0, int(layer_y), self.layer_labels_rect.width, layer.height)
+
+            # Layer background
+            if layer_rect.bottom > 0 and layer_rect.top < self.layer_labels_rect.height:
+                clipped_rect = layer_rect.clip(pygame.Rect(0, 0, self.layer_labels_rect.width,
+                                                           self.layer_labels_rect.height))
+                if clipped_rect.width > 0 and clipped_rect.height > 0:
+                    try:
+                        layer_surface = labels_surface.subsurface(clipped_rect)
+                        bg_color = self.theme_manager.get_color('layer_bg_alt' if i % 2 else 'layer_bg')
+                        layer_surface.fill(bg_color)
+                    except (ValueError, pygame.error):
+                        pass
+
+                # Layer name text
+                if layer_rect.height > 15:  # Only draw text if layer is tall enough
+                    try:
+                        text_color = (self.theme_manager.get_color('disabled_text') if not layer.visible
+                                      else self.theme_manager.get_color('layer_text'))
+                        font = self.theme_manager.get_font()
+
+                        if hasattr(font, 'render_premul'):
+                            text_surface = font.render_premul(layer.name, text_color)
+                        else:
+                            text_surface = font.render(layer.name, True, text_color)
+
+                        text_rect = text_surface.get_rect()
+                        text_rect.left = 5
+                        text_rect.centery = layer_y + layer.height // 2
+
+                        if (text_rect.bottom <= self.layer_labels_rect.height and
+                                text_rect.top >= 0):
+                            labels_surface.blit(text_surface, text_rect)
+                    except Exception:
+                        pass
+
+            layer_y += layer.height
 
     def _draw_timeline(self):
         """Draw timeline with layers and keyframes"""
@@ -843,12 +1116,15 @@ class TimelinePanel(UIElement):
             return
 
         # Draw timeline background with grid
-        self.renderer.draw_timeline_background(timeline_surface, self.timeline_rect, self.themed_colors)
+        self.renderer.draw_timeline_background(timeline_surface, self.timeline_rect)
 
         # Calculate visible area
         frames_per_pixel = 1.0 / self.zoom
         start_frame = self.scroll_x * frames_per_pixel
         end_frame = start_frame + self.timeline_rect.width * frames_per_pixel
+
+        # Performance optimization: limit visible keyframes
+        total_keyframes = 0
 
         # Draw layers
         layer_y = -self.scroll_y
@@ -859,40 +1135,23 @@ class TimelinePanel(UIElement):
             if layer_y > self.timeline_rect.height:
                 break
 
-            # Layer background
+            # Draw layer background
             layer_rect = pygame.Rect(0, int(layer_y), self.timeline_rect.width, layer.height)
             if layer_rect.bottom > 0 and layer_rect.top < self.timeline_rect.height:
-                bg_color = self.themed_colors.get('layer_bg_alt' if i % 2 else 'layer_bg',
-                                                  pygame.Color(50, 50, 50))
-                clipped_rect = layer_rect.clip(pygame.Rect(0, 0, self.timeline_rect.width, self.timeline_rect.height))
+                clipped_rect = layer_rect.clip(pygame.Rect(0, 0, self.timeline_rect.width,
+                                                           self.timeline_rect.height))
                 if clipped_rect.width > 0 and clipped_rect.height > 0:
                     try:
                         layer_surface = timeline_surface.subsurface(clipped_rect)
-                        layer_surface.fill(bg_color)
+                        self.renderer.draw_layer_background(layer_surface, clipped_rect, layer, i % 2 == 1)
                     except (ValueError, pygame.error):
                         pass
 
-                # Layer name
-                if layer_rect.height > 15:  # Only draw text if layer is tall enough
-                    try:
-                        text_color = self.themed_colors.get('disabled_text' if not layer.visible else 'normal_text',
-                                                            pygame.Color(255, 255, 255))
-                        if hasattr(self.themed_font, 'render_premul'):
-                            text_surface = self.themed_font.render_premul(layer.name, text_color)
-                        else:
-                            text_surface = self.themed_font.render(layer.name, True, text_color)
-
-                        text_rect = text_surface.get_rect()
-                        text_rect.left = 5
-                        text_rect.centery = layer_y + layer.height // 2
-
-                        if text_rect.bottom <= self.timeline_rect.height and text_rect.top >= 0:
-                            timeline_surface.blit(text_surface, text_rect)
-                    except Exception:
-                        pass
-
                 # Draw keyframes for this layer
-                self._draw_layer_keyframes(timeline_surface, layer, layer_y, start_frame, end_frame, frames_per_pixel)
+                if total_keyframes < self.config.behavior.max_visible_keyframes:
+                    drawn = self._draw_layer_keyframes(timeline_surface, layer, layer_y,
+                                                       start_frame, end_frame, frames_per_pixel)
+                    total_keyframes += drawn
 
             layer_y += layer.height
 
@@ -900,49 +1159,52 @@ class TimelinePanel(UIElement):
         playhead_x = int((self.current_frame - start_frame) / frames_per_pixel)
         if 0 <= playhead_x < self.timeline_rect.width:
             self.renderer.draw_playhead(timeline_surface, playhead_x,
-                                        pygame.Rect(0, 0, self.timeline_rect.width, self.timeline_rect.height),
-                                        self.themed_colors)
+                                        pygame.Rect(0, 0, self.timeline_rect.width,
+                                                    self.timeline_rect.height))
 
     def _draw_layer_keyframes(self, surface: pygame.Surface, layer: AnimationLayer,
                               layer_y: float, start_frame: float, end_frame: float,
-                              frames_per_pixel: float):
-        """Draw keyframes for a specific layer"""
+                              frames_per_pixel: float) -> int:
+        """Draw keyframes for a specific layer with performance tracking"""
         if not layer.visible:
-            return
+            return 0
+
+        keyframes_drawn = 0
 
         # Get all keyframes in visible range
-        keyframes = []
         for curve in layer.curves:
             for kf in curve.keyframes:
                 if start_frame <= kf.frame <= end_frame:
-                    keyframes.append((curve, kf))
+                    x = int((kf.frame - start_frame) / frames_per_pixel)
+                    y = int(layer_y + layer.height // 2)
 
-        # Draw keyframes
-        for curve, kf in keyframes:
-            x = int((kf.frame - start_frame) / frames_per_pixel)
-            y = int(layer_y + layer.height // 2)
+                    if 0 <= x < self.timeline_rect.width and 0 <= y < self.timeline_rect.height:
+                        # Check if this keyframe is selected
+                        is_selected = (layer.id, curve.property_name, kf.frame) in self.selection
+                        if is_selected:
+                            kf.set_selected(True)
+                        else:
+                            kf.set_selected(False)
 
-            if 0 <= x < self.timeline_rect.width and 0 <= y < self.timeline_rect.height:
-                # Check if this keyframe is selected
-                is_selected = (layer.id, curve.property_name, kf.frame) in self.selection
-                if is_selected:
-                    kf.set_selected(True)
-                else:
-                    kf.set_selected(False)
+                        self.renderer.draw_keyframe(surface, (x, y), kf)
+                        keyframes_drawn += 1
 
-                self.renderer.draw_keyframe(surface, (x, y), kf, self.themed_colors)
+        return keyframes_drawn
 
     def process_event(self, event: pygame.event.Event) -> bool:
-        """Process pygame events"""
+        """Process pygame events with comprehensive handling"""
         consumed = False
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
+                self.is_panel_focused = True
                 relative_pos = (event.pos[0] - self.rect.x, event.pos[1] - self.rect.y)
                 if event.button == 1:  # Left click
                     consumed = self._handle_left_click(relative_pos)
                 elif event.button == 3:  # Right click
                     consumed = self._handle_right_click(relative_pos)
+            else:
+                self.is_panel_focused = False
 
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:
@@ -957,13 +1219,13 @@ class TimelinePanel(UIElement):
             if self.rect.collidepoint(pygame.mouse.get_pos()):
                 consumed = self._handle_scroll(event.x, event.y)
 
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN and self.is_panel_focused:
             consumed = self._handle_key_event(event)
 
         return consumed
 
     def _handle_left_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle left mouse click"""
+        """Handle left mouse click with improved area detection"""
         x, y = pos
 
         # Check controls area
@@ -974,22 +1236,48 @@ class TimelinePanel(UIElement):
         elif self.scrubber_rect.collidepoint(pos):
             # Start scrubbing
             self.is_scrubbing = True
-            self._set_frame_from_scrubber_pos(x)
+            self._set_frame_from_scrubber_pos(x - self.scrubber_rect.x)
             return True
+
+        # Check layer labels area
+        elif self.layer_labels_rect.collidepoint(pos):
+            return self._handle_layer_label_click(pos)
 
         # Check timeline area
         elif self.timeline_rect.collidepoint(pos):
-            timeline_pos = (x, y - self.timeline_rect.y)
+            timeline_pos = (x - self.timeline_rect.x, y - self.timeline_rect.y)
             return self._handle_timeline_click(timeline_pos)
 
         return False
 
+    def _handle_layer_label_click(self, pos: Tuple[int, int]) -> bool:
+        """Handle click in layer labels area"""
+        if not self.clip:
+            return False
+
+        y = pos[1] - self.layer_labels_rect.y
+        layer_y = -self.scroll_y
+
+        for layer in self.clip.layers:
+            if layer_y <= y < layer_y + layer.height:
+                # Toggle layer visibility or select layer
+                self.focused_layer = layer.id
+
+                # Could add layer visibility toggle here
+                # layer.visible = not layer.visible
+
+                self._rebuild_image()
+                return True
+            layer_y += layer.height
+
+        return False
+
     def _handle_controls_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle click in controls area"""
-        # Simple button detection (would be more sophisticated in real implementation)
+        """Handle click in controls area with configuration support"""
+        layout = self.config.layout
         button_size = min(24, self.controls_rect.height - 6)
         button_y = (self.controls_rect.height - button_size) // 2
-        button_spacing = button_size + 4
+        button_spacing = button_size + layout.control_button_spacing
 
         button_x = 10
         buttons = [
@@ -1010,7 +1298,7 @@ class TimelinePanel(UIElement):
         return False
 
     def _handle_timeline_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle click in timeline area"""
+        """Handle click in timeline area with improved keyframe detection"""
         if not self.clip:
             return False
 
@@ -1034,15 +1322,17 @@ class TimelinePanel(UIElement):
         if not clicked_layer:
             return False
 
-        # Check for keyframe click
+        # Check for keyframe click with configurable tolerance
+        tolerance = self.config.interaction.keyframe_click_tolerance
         keyframe_clicked = False
+
         for curve in clicked_layer.curves:
             for kf in curve.keyframes:
                 kf_x = int((kf.frame - start_frame) / frames_per_pixel)
                 kf_y = layer_y + clicked_layer.height // 2
 
                 # Check if click is near keyframe
-                if abs(x - kf_x) <= self.config.keyframe_size and abs(y - kf_y) <= self.config.keyframe_size:
+                if abs(x - kf_x) <= tolerance and abs(y - kf_y) <= tolerance:
                     self._select_keyframe(clicked_layer.id, curve.property_name, kf.frame)
                     keyframe_clicked = True
                     break
@@ -1052,7 +1342,8 @@ class TimelinePanel(UIElement):
 
         if not keyframe_clicked:
             # Clear selection and set current frame
-            self.selection.clear()
+            if not self.config.behavior.multi_select_keyframes:
+                self.selection.clear()
             self.set_current_frame(clicked_frame)
 
         self._rebuild_image()
@@ -1060,8 +1351,7 @@ class TimelinePanel(UIElement):
 
     @staticmethod
     def _handle_right_click(pos: Tuple[int, int]) -> bool:
-        """Handle right mouse click"""
-        # Context menu would be implemented here
+        """Handle right mouse click - context menu would be implemented here"""
         return False
 
     def _handle_mouse_up(self):
@@ -1070,24 +1360,31 @@ class TimelinePanel(UIElement):
         self.is_dragging_keyframe = False
 
     def _handle_mouse_motion(self, pos: Tuple[int, int]) -> bool:
-        """Handle mouse motion"""
+        """Handle mouse motion with improved hover detection"""
         if self.is_scrubbing and self.scrubber_rect.collidepoint(pos):
-            self._set_frame_from_scrubber_pos(pos[0])
+            self._set_frame_from_scrubber_pos(pos[0] - self.scrubber_rect.x)
             return True
 
         # Update hover state
-        self._update_hover_state(pos)
+        old_hovered = self.hovered_keyframe
+        self.hovered_keyframe = self._get_keyframe_at_pos(pos)
+
+        if old_hovered != self.hovered_keyframe:
+            self._rebuild_image()
+            return True
+
         return False
 
     def _handle_scroll(self, x_delta: int, y_delta: int) -> bool:
-        """Handle scroll wheel"""
+        """Handle scroll wheel with configuration support"""
         keys = pygame.key.get_pressed()
+        interaction = self.config.interaction
 
         if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
             # Zoom
-            zoom_factor = 1.0 + (y_delta * ZOOM_SENSITIVITY)
+            zoom_factor = 1.0 + (y_delta * interaction.zoom_sensitivity)
             old_zoom = self.zoom
-            self.zoom = max(MIN_ZOOM, min(MAX_ZOOM, self.zoom * zoom_factor))
+            self.zoom = max(interaction.min_zoom, min(interaction.max_zoom, self.zoom * zoom_factor))
 
             if self.zoom != old_zoom:
                 # Adjust scroll to zoom around mouse position
@@ -1108,10 +1405,10 @@ class TimelinePanel(UIElement):
             # Scroll
             if abs(x_delta) > abs(y_delta):
                 # Horizontal scroll
-                self.scroll_x = max(0, int(self.scroll_x + x_delta * 10))
+                self.scroll_x = max(0, int(self.scroll_x + x_delta * interaction.scroll_speed))
             else:
                 # Vertical scroll
-                self.scroll_y = max(0, int(self.scroll_y + y_delta * 10))
+                self.scroll_y = max(0, int(self.scroll_y + y_delta * interaction.scroll_speed))
 
             self._rebuild_image()
             return True
@@ -1147,30 +1444,22 @@ class TimelinePanel(UIElement):
         start_frame = self.scroll_x * frames_per_pixel
         frame = start_frame + x * frames_per_pixel
 
-        if self.config.snap_to_frames:
+        if self.config.behavior.snap_to_frames:
             frame = round(frame)
 
         self.set_current_frame(frame)
 
-    def _update_hover_state(self, pos: Tuple[int, int]):
-        """Update hover state for UI elements"""
-        # Update hovered keyframe
-        old_hovered = self.hovered_keyframe
-        self.hovered_keyframe = self._get_keyframe_at_pos(pos)
-
-        if old_hovered != self.hovered_keyframe:
-            self._rebuild_image()
-
     def _get_keyframe_at_pos(self, pos: Tuple[int, int]) -> Optional[Tuple[str, str, int]]:
-        """Get keyframe at mouse position"""
+        """Get keyframe at mouse position with configuration support"""
         if not self.clip or not self.timeline_rect.collidepoint(pos):
             return None
 
-        x, y = pos[0], pos[1] - self.timeline_rect.y
+        x, y = pos[0] - self.timeline_rect.x, pos[1] - self.timeline_rect.y
 
         # Calculate frame and layer
         frames_per_pixel = 1.0 / self.zoom
         start_frame = self.scroll_x * frames_per_pixel
+        tolerance = self.config.interaction.keyframe_click_tolerance
 
         layer_y = -self.scroll_y
         for layer in self.clip.layers:
@@ -1181,8 +1470,8 @@ class TimelinePanel(UIElement):
                         kf_x = int((kf.frame - start_frame) / frames_per_pixel)
                         kf_y = layer_y + layer.height // 2
 
-                        if (abs(x - kf_x) <= self.config.keyframe_size and
-                                abs(y - kf_y) <= self.config.keyframe_size):
+                        if (abs(x - kf_x) <= tolerance and
+                                abs(y - kf_y) <= tolerance):
                             return layer.id, curve.property_name, kf.frame
                 break
             layer_y += layer.height
@@ -1190,16 +1479,22 @@ class TimelinePanel(UIElement):
         return None
 
     def _select_keyframe(self, layer_id: str, property_name: str, frame: int):
-        """Select a keyframe"""
+        """Select a keyframe with multi-selection support"""
         keyframe_id = (layer_id, property_name, frame)
 
-        # Toggle selection
-        if keyframe_id in self.selection:
-            self.selection.remove(keyframe_id)
+        if self.config.behavior.multi_select_keyframes:
+            # Toggle selection
+            if keyframe_id in self.selection:
+                self.selection.remove(keyframe_id)
+            else:
+                self.selection.append(keyframe_id)
         else:
-            # Clear previous selection (single selection for now)
-            self.selection.clear()
-            self.selection.append(keyframe_id)
+            # Single selection
+            if keyframe_id in self.selection:
+                self.selection.clear()
+            else:
+                self.selection.clear()
+                self.selection.append(keyframe_id)
 
         event_data = {
             'selection': self.selection.copy(),
@@ -1229,6 +1524,22 @@ class TimelinePanel(UIElement):
 
         self.selection.clear()
         self._rebuild_image()
+
+    def _auto_scroll_to_frame(self, frame: float):
+        """Auto-scroll timeline to keep frame visible with configuration support"""
+        frames_per_pixel = 1.0 / self.zoom
+        start_frame = self.scroll_x * frames_per_pixel
+        end_frame = start_frame + self.scrubber_rect.width * frames_per_pixel
+
+        margin = (end_frame - start_frame) * self.config.interaction.auto_scroll_margin
+
+        if frame < start_frame + margin:
+            self.scroll_x = max(0, int((frame - margin) / frames_per_pixel))
+            self._rebuild_image()
+        elif frame > end_frame - margin:
+            self.scroll_x = max(0,
+                                int((frame - self.scrubber_rect.width * frames_per_pixel + margin) / frames_per_pixel))
+            self._rebuild_image()
 
     # Playback control methods
     def _toggle_playback(self):
@@ -1260,7 +1571,7 @@ class TimelinePanel(UIElement):
             self.set_current_frame(100)  # Default length
 
     def update(self, time_delta: float):
-        """Update the panel"""
+        """Update the panel with playback handling"""
         super().update(time_delta)
 
         # Handle playback
@@ -1282,23 +1593,8 @@ class TimelinePanel(UIElement):
             self.last_playback_time = current_time
 
             # Auto-scroll during playback
-            if self.config.auto_scroll_on_playback:
+            if self.config.behavior.auto_scroll_on_playback:
                 self._auto_scroll_to_frame(self.current_frame)
-
-    def _auto_scroll_to_frame(self, frame: float):
-        """Auto-scroll timeline to keep frame visible"""
-        frames_per_pixel = 1.0 / self.zoom
-        start_frame = self.scroll_x * frames_per_pixel
-        end_frame = start_frame + self.scrubber_rect.width * frames_per_pixel
-
-        margin = (end_frame - start_frame) * 0.1  # 10% margin
-
-        if frame < start_frame + margin:
-            self.scroll_x = max(0, int((frame - margin) / frames_per_pixel))
-            self._rebuild_image()
-        elif frame > end_frame - margin:
-            self.scroll_x = max(0, int((frame - self.scrubber_rect.width * frames_per_pixel + margin) / frames_per_pixel))
-            self._rebuild_image()
 
     # Public API methods
     def set_clip(self, clip: AnimationClip):
@@ -1307,9 +1603,10 @@ class TimelinePanel(UIElement):
         self.current_frame = 0.0
         self.selection.clear()
 
-        if self.config.zoom_to_fit_on_clip_change and clip:
+        if self.config.behavior.zoom_to_fit_on_clip_change and clip:
             self.zoom_to_fit()
 
+        self._last_rebuild_state = None  # Force rebuild
         self._rebuild_image()
 
     def get_clip(self) -> Optional[AnimationClip]:
@@ -1458,7 +1755,8 @@ class TimelinePanel(UIElement):
 
         available_width = self.scrubber_rect.width - 20  # Some margin
         self.zoom = available_width / self.clip.length
-        self.zoom = max(MIN_ZOOM, min(MAX_ZOOM, self.zoom))
+        self.zoom = max(self.config.interaction.min_zoom,
+                        min(self.config.interaction.max_zoom, self.zoom))
         self.scroll_x = 0
 
         self._rebuild_image()
@@ -1466,7 +1764,8 @@ class TimelinePanel(UIElement):
     def set_zoom(self, zoom: float):
         """Set timeline zoom level"""
         old_zoom = self.zoom
-        self.zoom = max(MIN_ZOOM, min(MAX_ZOOM, zoom))
+        self.zoom = max(self.config.interaction.min_zoom,
+                        min(self.config.interaction.max_zoom, zoom))
 
         if old_zoom != self.zoom:
             event_data = {'zoom': self.zoom, 'ui_element': self}
@@ -1492,11 +1791,30 @@ class TimelinePanel(UIElement):
 
     def refresh(self):
         """Refresh the timeline display"""
+        self._last_rebuild_state = None  # Force rebuild
         self._rebuild_image()
 
+    # Configuration update methods
+    def update_layout_config(self, layout_config: TimelineLayoutConfig):
+        """Update layout configuration and rebuild"""
+        self.config.layout = copy.deepcopy(layout_config)
+        self._setup_layout()
+        self._last_rebuild_state = None
+        self._rebuild_image()
 
-# Example theme for timeline panel
-TIMELINE_THEME = {
+    def update_behavior_config(self, behavior_config: TimelineBehaviorConfig):
+        """Update behavior configuration"""
+        self.config.behavior = copy.deepcopy(behavior_config)
+        self._last_rebuild_state = None
+        self._rebuild_image()
+
+    def update_interaction_config(self, interaction_config: TimelineInteractionConfig):
+        """Update interaction configuration"""
+        self.config.interaction = copy.deepcopy(interaction_config)
+
+
+# Example themes for timeline panel
+TIMELINE_DARK_THEME = {
     "timeline_panel": {
         "colours": {
             "timeline_bg": "#282828",
@@ -1504,13 +1822,19 @@ TIMELINE_THEME = {
             "scrubber_bg": "#2d2d2d",
             "layer_bg": "#323232",
             "layer_bg_alt": "#2d2d2d",
+            "layer_label_bg": "#373737",
             "normal_text": "#ffffff",
             "disabled_text": "#969696",
+            "layer_text": "#dcdcdc",
             "grid_line": "#3c3c3c",
             "major_tick": "#c8c8c8",
             "minor_tick": "#969696",
             "playhead": "#ff5050",
+            "playhead_handle": "#ff6464",
             "selection": "#6496ff",
+            "selection_bg": "#4682b4",
+            "hover_bg": "#3c3c3c",
+            "focused_bg": "#5078a0",
             "keyframe_linear": "#64a0ff",
             "keyframe_ease_in": "#64ff64",
             "keyframe_ease_out": "#ff6464",
@@ -1524,8 +1848,60 @@ TIMELINE_THEME = {
             "button_bg": "#3c3c3c",
             "button_hover": "#505050",
             "button_pressed": "#282828",
+            "button_text": "#ffffff",
             "border": "#646464",
-            "focus_border": "#78a0ff"
+            "focus_border": "#78a0ff",
+            "layer_border": "#505050",
+            "time_cursor": "#ffffff"
+        },
+        "font": {
+            "name": "arial",
+            "size": "10",
+            "bold": "0",
+            "italic": "0"
+        }
+    }
+}
+
+TIMELINE_LIGHT_THEME = {
+    "timeline_panel": {
+        "colours": {
+            "timeline_bg": "#f5f5f5",
+            "controls_bg": "#e8e8e8",
+            "scrubber_bg": "#f0f0f0",
+            "layer_bg": "#ffffff",
+            "layer_bg_alt": "#f8f8f8",
+            "layer_label_bg": "#e0e0e0",
+            "normal_text": "#2b2b2b",
+            "disabled_text": "#969696",
+            "layer_text": "#333333",
+            "grid_line": "#d0d0d0",
+            "major_tick": "#333333",
+            "minor_tick": "#666666",
+            "playhead": "#dc143c",
+            "playhead_handle": "#ff6b6b",
+            "selection": "#4a90e2",
+            "selection_bg": "#cce4f6",
+            "hover_bg": "#e6e6e6",
+            "focused_bg": "#b3d9ff",
+            "keyframe_linear": "#4a90e2",
+            "keyframe_ease_in": "#27ae60",
+            "keyframe_ease_out": "#e74c3c",
+            "keyframe_ease_in_out": "#f39c12",
+            "keyframe_step": "#95a5a6",
+            "keyframe_bezier": "#9b59b6",
+            "keyframe_smooth": "#1abc9c",
+            "keyframe_selected": "#f1c40f",
+            "keyframe_locked": "#bdc3c7",
+            "keyframe_outline": "#2c3e50",
+            "button_bg": "#d3d3d3",
+            "button_hover": "#c0c0c0",
+            "button_pressed": "#a8a8a8",
+            "button_text": "#2b2b2b",
+            "border": "#a0a0a0",
+            "focus_border": "#4a90e2",
+            "layer_border": "#c0c0c0",
+            "time_cursor": "#2b2b2b"
         },
         "font": {
             "name": "arial",
@@ -1633,25 +2009,46 @@ class SampleAnimatedObject:
 
 
 def main():
-    """Example demonstration of the Timeline Panel"""
+    """Example demonstration of the fully configurable Timeline Panel"""
     pygame.init()
     screen = pygame.display.set_mode((1200, 800))
-    pygame.display.set_caption("Timeline Panel Demo")
+    pygame.display.set_caption("Fully Configurable Timeline Panel Demo")
     clock = pygame.time.Clock()
 
-    # Create manager with theme
-    manager = pygame_gui.UIManager((1200, 800), TIMELINE_THEME)
+    # Start with dark theme
+    manager = pygame_gui.UIManager((1200, 800), TIMELINE_DARK_THEME)
+    current_theme = "dark"
 
-    # Create timeline panel
-    config = TimelineConfig()
-    config.show_frame_numbers = True
-    config.show_time_code = True
-    config.auto_scroll_on_playback = True
+    # Create different configurations for demonstration
+    compact_config = TimelineConfig()
+    compact_config.layout.layer_height = 25
+    compact_config.layout.controls_height = 25
+    compact_config.layout.scrubber_height = 20
+    compact_config.layout.keyframe_size = 6
+    compact_config.behavior.show_frame_numbers = False
+    compact_config.behavior.show_layer_names = True
 
+    large_config = TimelineConfig()
+    large_config.layout.layer_height = 60
+    large_config.layout.controls_height = 45
+    large_config.layout.scrubber_height = 40
+    large_config.layout.keyframe_size = 12
+    large_config.layout.layer_label_width = 200
+    large_config.behavior.show_frame_numbers = True
+    large_config.behavior.show_layer_names = True
+    large_config.behavior.show_interpolation_curves = True
+
+    performance_config = TimelineConfig()
+    performance_config.behavior.cache_rendered_elements = True
+    performance_config.behavior.lazy_redraw = True
+    performance_config.behavior.max_visible_keyframes = 500
+    performance_config.layout.keyframe_size = 8
+
+    # Create timeline panel with default config
     timeline_panel = TimelinePanel(
-        pygame.Rect(50, 50, 1100, 300),
+        pygame.Rect(50, 50, 1100, 350),
         manager,
-        config,
+        compact_config,
         object_id=ObjectID(object_id='#main_timeline', class_id='@timeline_panel')
     )
 
@@ -1671,20 +2068,20 @@ def main():
     timeline_panel.set_frame_change_callback(on_frame_changed)
 
     # Instructions
-    print("\nTimeline Panel Demo")
-    print("\nFeatures:")
-    print("- Frame-based timeline with scrubbing")
-    print("- Multiple interpolation types (linear, ease, step, bezier, smooth)")
-    print("- Layer management")
-    print("- Keyframe editing (add, remove, select)")
-    print("- Playback controls")
-    print("- Zoom and scroll")
-    print("- Integration with animated objects")
+    print("\nFully Configurable Timeline Panel Demo")
+    print("\nNew Configuration Features:")
+    print("- Comprehensive layout configuration")
+    print("- Behavior and interaction settings")
+    print("- Theme management with light/dark themes")
+    print("- Performance optimizations")
+    print("- Layer label area with configurable width")
+    print("- Configurable keyframe appearance and behavior")
 
     print("\nControls:")
     print("- Click controls to play/pause/stop")
     print("- Click and drag in scrubber to scrub timeline")
     print("- Click keyframes to select them")
+    print("- Click layer labels to focus layers")
     print("- Space bar to toggle playback")
     print("- Left/Right arrows to step frames")
     print("- Home/End to go to start/end")
@@ -1692,11 +2089,20 @@ def main():
     print("- Mouse wheel to scroll")
     print("- Delete to remove selected keyframes")
 
-    print("\nPress K to add keyframe at current frame")
-    print("Press Z to zoom to fit")
-    print("Press F to go to specific frame")
-    print("Press L to toggle loop")
-    print("Press C to clear selection\n")
+    print("\nConfiguration Controls:")
+    print("Press '1' for compact layout")
+    print("Press '2' for large layout")
+    print("Press '3' for performance layout")
+    print("Press 'T' to toggle light/dark theme")
+    print("Press 'G' to toggle grid display")
+    print("Press 'N' to toggle frame numbers")
+    print("Press 'L' to toggle layer names")
+    print("Press 'M' to toggle multi-select")
+    print("Press 'S' to toggle snap to frames")
+    print("Press 'A' to toggle auto-scroll")
+    print("Press 'Z' to zoom to fit")
+    print("Press 'K' to add keyframe at current frame")
+    print("Press 'C' to clear selection\n")
 
     running = True
     while running:
@@ -1707,28 +2113,81 @@ def main():
                 running = False
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_k:
-                    # Add keyframe at current frame
-                    frame = int(timeline_panel.get_current_frame())
-                    timeline_panel.add_keyframe("transform", "position_x", frame,
-                                                animated_object.position_x, InterpolationType.LINEAR)
-                    print(f"Added keyframe at frame {frame}")
+                if event.key == pygame.K_1:
+                    # Apply compact configuration
+                    timeline_panel.update_layout_config(compact_config.layout)
+                    timeline_panel.update_behavior_config(compact_config.behavior)
+                    print("Applied compact layout configuration")
+
+                elif event.key == pygame.K_2:
+                    # Apply large configuration
+                    timeline_panel.update_layout_config(large_config.layout)
+                    timeline_panel.update_behavior_config(large_config.behavior)
+                    print("Applied large layout configuration")
+
+                elif event.key == pygame.K_3:
+                    # Apply performance configuration
+                    timeline_panel.update_layout_config(performance_config.layout)
+                    timeline_panel.update_behavior_config(performance_config.behavior)
+                    print("Applied performance configuration")
+
+                elif event.key == pygame.K_t:
+                    # Toggle theme
+                    if current_theme == "dark":
+                        manager.get_theme().load_theme(TIMELINE_LIGHT_THEME)
+                        current_theme = "light"
+                    else:
+                        manager.get_theme().load_theme(TIMELINE_DARK_THEME)
+                        current_theme = "dark"
+
+                    timeline_panel.rebuild_from_changed_theme_data()
+                    print(f"Switched to {current_theme} theme")
+
+                elif event.key == pygame.K_g:
+                    # Toggle grid display
+                    timeline_panel.config.behavior.show_grid = not timeline_panel.config.behavior.show_grid
+                    timeline_panel.refresh()
+                    print(f"Grid display: {'ON' if timeline_panel.config.behavior.show_grid else 'OFF'}")
+
+                elif event.key == pygame.K_n:
+                    # Toggle frame numbers
+                    timeline_panel.config.behavior.show_frame_numbers = not timeline_panel.config.behavior.show_frame_numbers
+                    timeline_panel.refresh()
+                    print(f"Frame numbers: {'ON' if timeline_panel.config.behavior.show_frame_numbers else 'OFF'}")
+
+                elif event.key == pygame.K_l:
+                    # Toggle layer names
+                    timeline_panel.config.behavior.show_layer_names = not timeline_panel.config.behavior.show_layer_names
+                    timeline_panel.refresh()
+                    print(f"Layer names: {'ON' if timeline_panel.config.behavior.show_layer_names else 'OFF'}")
+
+                elif event.key == pygame.K_m:
+                    # Toggle multi-select
+                    timeline_panel.config.behavior.multi_select_keyframes = not timeline_panel.config.behavior.multi_select_keyframes
+                    print(
+                        f"Multi-select keyframes: {'ON' if timeline_panel.config.behavior.multi_select_keyframes else 'OFF'}")
+
+                elif event.key == pygame.K_s:
+                    # Toggle snap to frames
+                    timeline_panel.config.behavior.snap_to_frames = not timeline_panel.config.behavior.snap_to_frames
+                    print(f"Snap to frames: {'ON' if timeline_panel.config.behavior.snap_to_frames else 'OFF'}")
+
+                elif event.key == pygame.K_a:
+                    # Toggle auto-scroll
+                    timeline_panel.config.behavior.auto_scroll_on_playback = not timeline_panel.config.behavior.auto_scroll_on_playback
+                    print(f"Auto-scroll: {'ON' if timeline_panel.config.behavior.auto_scroll_on_playback else 'OFF'}")
 
                 elif event.key == pygame.K_z:
                     # Zoom to fit
                     timeline_panel.zoom_to_fit()
                     print("Zoomed to fit")
 
-                elif event.key == pygame.K_f:
-                    # Go to frame (simplified - just go to frame 60)
-                    timeline_panel.set_current_frame(60)
-                    print("Jumped to frame 60")
-
-                elif event.key == pygame.K_l:
-                    # Toggle loop
-                    if sample_clip:
-                        sample_clip.loop = not sample_clip.loop
-                        print(f"Loop {'enabled' if sample_clip.loop else 'disabled'}")
+                elif event.key == pygame.K_k:
+                    # Add keyframe at current frame
+                    frame = int(timeline_panel.get_current_frame())
+                    timeline_panel.add_keyframe("transform", "position_x", frame,
+                                                animated_object.position_x, InterpolationType.LINEAR)
+                    print(f"Added keyframe at frame {frame}")
 
                 elif event.key == pygame.K_c:
                     # Clear selection
@@ -1779,7 +2238,7 @@ def main():
 
         # Draw animated object visualization
         center_x = 600
-        center_y = 500
+        center_y = 550
 
         # Calculate position based on animation
         draw_x = center_x + animated_object.position_x
@@ -1806,34 +2265,146 @@ def main():
             pygame.draw.line(screen, pygame.Color(255, 255, 255),
                              (draw_x, draw_y), (end_x, end_y), 2)
 
-        # Draw info text
-        font = pygame.font.Font(None, 24)
+        # Draw comprehensive info text
+        font = pygame.font.Font(None, 20)
+        small_font = pygame.font.Font(None, 16)
+
         info_lines = [
-            f"Timeline Demo - Frame: {timeline_panel.get_current_frame():.1f}",
+            f"Configurable Timeline Demo - Frame: {timeline_panel.get_current_frame():.1f}",
             f"Position: ({animated_object.position_x:.1f}, {animated_object.position_y:.1f})",
             f"Rotation: {animated_object.rotation:.1f}",
             f"Scale: {animated_object.scale:.2f}",
             f"Opacity: {animated_object.opacity:.2f}",
-            f"Playback: {timeline_panel.playback_state.value}"
+            f"Playback: {timeline_panel.playback_state.value}",
+            f"Theme: {current_theme}",
+            f"Zoom: {timeline_panel.zoom:.2f}x"
         ]
 
-        y_offset = 380
+        y_offset = 420
         for line in info_lines:
             text_surface = font.render(line, True, pygame.Color(255, 255, 255))
             screen.blit(text_surface, (50, y_offset))
-            y_offset += 25
+            y_offset += 22
+
+        # Draw configuration status
+        config_lines = [
+            "Configuration Status:",
+            f"Layer Height: {timeline_panel.config.layout.layer_height}px",
+            f"Keyframe Size: {timeline_panel.config.layout.keyframe_size}px",
+            f"Grid: {'ON' if timeline_panel.config.behavior.show_grid else 'OFF'}",
+            f"Frame Numbers: {'ON' if timeline_panel.config.behavior.show_frame_numbers else 'OFF'}",
+            f"Layer Names: {'ON' if timeline_panel.config.behavior.show_layer_names else 'OFF'}",
+            f"Multi-Select: {'ON' if timeline_panel.config.behavior.multi_select_keyframes else 'OFF'}",
+            f"Snap to Frames: {'ON' if timeline_panel.config.behavior.snap_to_frames else 'OFF'}",
+            f"Auto-Scroll: {'ON' if timeline_panel.config.behavior.auto_scroll_on_playback else 'OFF'}",
+            f"Max Visible Keyframes: {timeline_panel.config.behavior.max_visible_keyframes}",
+        ]
+
+        y_offset = 420
+        for i, line in enumerate(config_lines):
+            if i == 0:
+                text_surface = font.render(line, True, pygame.Color(200, 255, 200))
+            else:
+                text_surface = small_font.render(line, True, pygame.Color(180, 180, 180))
+            screen.blit(text_surface, (400, y_offset))
+            y_offset += 18
 
         # Draw keyframe info
+        selection_info = []
         if timeline_panel.get_selected_keyframes():
-            selection_text = f"Selected: {len(timeline_panel.get_selected_keyframes())} keyframes"
-            text_surface = font.render(selection_text, True, pygame.Color(255, 255, 100))
-            screen.blit(text_surface, (50, y_offset))
+            selection_info.append(f"Selected: {len(timeline_panel.get_selected_keyframes())} keyframes")
+
+            # Show details of first selected keyframe
+            if timeline_panel.get_selected_keyframes():
+                layer_id, prop_name, frame = timeline_panel.get_selected_keyframes()[0]
+                value = timeline_panel.get_value_at_frame(layer_id, prop_name, frame)
+                selection_info.append(f"Layer: {layer_id}")
+                selection_info.append(f"Property: {prop_name}")
+                selection_info.append(f"Frame: {frame}")
+                selection_info.append(f"Value: {value}")
+
+        if timeline_panel.hovered_keyframe:
+            layer_id, prop_name, frame = timeline_panel.hovered_keyframe
+            selection_info.append(f"Hovered: {layer_id}.{prop_name} @ {frame}")
+
+        y_offset = 420
+        for line in selection_info:
+            text_surface = small_font.render(line, True, pygame.Color(255, 255, 100))
+            screen.blit(text_surface, (700, y_offset))
+            y_offset += 18
+
+        # Draw performance info
+        performance_info = [
+            "Performance:",
+            f"Layers: {len(sample_clip.layers)}",
+            f"Total Keyframes: {sum(len(curve.keyframes) for layer in sample_clip.layers for curve in layer.curves)}",
+            f"Clip Length: {sample_clip.length} frames",
+            f"FPS: {sample_clip.fps}",
+            f"Duration: {sample_clip.get_duration_seconds():.2f}s",
+        ]
+
+        y_offset = 420
+        for i, line in enumerate(performance_info):
+            if i == 0:
+                text_surface = font.render(line, True, pygame.Color(255, 200, 200))
+            else:
+                text_surface = small_font.render(line, True, pygame.Color(180, 180, 180))
+            screen.blit(text_surface, (900, y_offset))
+            y_offset += 18
+
+        # Draw layer information
+        if timeline_panel.clip:
+            layer_info = ["Layers:"]
+            for layer in timeline_panel.clip.layers:
+                status = "visible" if layer.visible else "hidden"
+                if layer.locked:
+                    status += ", locked"
+                if timeline_panel.focused_layer == layer.id:
+                    status += ", focused"
+
+                curve_count = len(layer.curves)
+                keyframe_count = sum(len(curve.keyframes) for curve in layer.curves)
+
+                layer_info.append(f"{layer.name}: {curve_count} curves, {keyframe_count} keyframes ({status})")
+
+            y_offset = 600
+            for i, line in enumerate(layer_info):
+                if i == 0:
+                    text_surface = font.render(line, True, pygame.Color(200, 200, 255))
+                else:
+                    text_surface = small_font.render(line, True, pygame.Color(180, 180, 180))
+                screen.blit(text_surface, (50, y_offset))
+                y_offset += 18
+
+        # Draw controls help
+        help_info = [
+            "Quick Controls:",
+            "1/2/3 - Layout configs",
+            "T - Toggle theme",
+            "G - Toggle grid",
+            "N - Frame numbers",
+            "L - Layer names",
+            "M - Multi-select",
+            "S - Snap frames",
+            "A - Auto-scroll",
+            "Z - Zoom to fit",
+            "K - Add keyframe",
+            "C - Clear selection"
+        ]
+
+        y_offset = 520
+        for i, line in enumerate(help_info):
+            if i == 0:
+                text_surface = font.render(line, True, pygame.Color(255, 255, 200))
+            else:
+                text_surface = small_font.render(line, True, pygame.Color(180, 180, 180))
+            screen.blit(text_surface, (700, y_offset))
+            y_offset += 18
 
         manager.draw_ui(screen)
         pygame.display.flip()
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main()
