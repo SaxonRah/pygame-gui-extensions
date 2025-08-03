@@ -773,8 +773,8 @@ class TimelinePanel(UIElement):
         self.image = pygame.Surface(self.rect.size).convert()
 
         # Initialize
-        self._setup_layout()
-        self._rebuild_image()
+        self.setup_layout()
+        self.rebuild_image()
 
     def _needs_rebuild(self) -> bool:
         """Check if UI needs rebuilding with better performance tracking"""
@@ -803,9 +803,9 @@ class TimelinePanel(UIElement):
         self.theme_manager.rebuild_from_changed_theme_data()
         self.renderer = TimelineRenderer(self.config, self.theme_manager)
         self._last_rebuild_state = None  # Force rebuild
-        self._rebuild_image()
+        self.rebuild_image()
 
-    def _setup_layout(self):
+    def setup_layout(self):
         """Setup layout rectangles based on configuration"""
         layout = self.config.layout
 
@@ -836,7 +836,7 @@ class TimelinePanel(UIElement):
         # Layers area within timeline
         self.layers_rect = self.timeline_rect.copy()
 
-    def _rebuild_image(self):
+    def rebuild_image(self):
         """Rebuild the image surface with performance optimizations"""
         if not self.config.behavior.lazy_redraw or self._needs_rebuild():
             # Fill background
@@ -1266,7 +1266,7 @@ class TimelinePanel(UIElement):
                 # Could add layer visibility toggle here
                 # layer.visible = not layer.visible
 
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
             layer_y += layer.height
 
@@ -1346,7 +1346,7 @@ class TimelinePanel(UIElement):
                 self.selection.clear()
             self.set_current_frame(clicked_frame)
 
-        self._rebuild_image()
+        self.rebuild_image()
         return True
 
     @staticmethod
@@ -1370,7 +1370,7 @@ class TimelinePanel(UIElement):
         self.hovered_keyframe = self._get_keyframe_at_pos(pos)
 
         if old_hovered != self.hovered_keyframe:
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
@@ -1396,7 +1396,7 @@ class TimelinePanel(UIElement):
                     new_frames_per_pixel = 1.0 / self.zoom
                     self.scroll_x = (mouse_frame - mouse_x * new_frames_per_pixel) / new_frames_per_pixel
 
-                self._rebuild_image()
+                self.rebuild_image()
 
                 event_data = {'zoom': self.zoom, 'ui_element': self}
                 pygame.event.post(pygame.event.Event(UI_TIMELINE_ZOOM_CHANGED, event_data))
@@ -1410,7 +1410,7 @@ class TimelinePanel(UIElement):
                 # Vertical scroll
                 self.scroll_y = max(0, int(self.scroll_y + y_delta * interaction.scroll_speed))
 
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
@@ -1523,7 +1523,7 @@ class TimelinePanel(UIElement):
                     pygame.event.post(pygame.event.Event(UI_TIMELINE_KEYFRAME_REMOVED, event_data))
 
         self.selection.clear()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _auto_scroll_to_frame(self, frame: float):
         """Auto-scroll timeline to keep frame visible with configuration support"""
@@ -1535,11 +1535,11 @@ class TimelinePanel(UIElement):
 
         if frame < start_frame + margin:
             self.scroll_x = max(0, int((frame - margin) / frames_per_pixel))
-            self._rebuild_image()
+            self.rebuild_image()
         elif frame > end_frame - margin:
             self.scroll_x = max(0,
                                 int((frame - self.scrubber_rect.width * frames_per_pixel + margin) / frames_per_pixel))
-            self._rebuild_image()
+            self.rebuild_image()
 
     # Playback control methods
     def _toggle_playback(self):
@@ -1607,7 +1607,7 @@ class TimelinePanel(UIElement):
             self.zoom_to_fit()
 
         self._last_rebuild_state = None  # Force rebuild
-        self._rebuild_image()
+        self.rebuild_image()
 
     def get_clip(self) -> Optional[AnimationClip]:
         """Get the current animation clip"""
@@ -1636,7 +1636,7 @@ class TimelinePanel(UIElement):
             if self.frame_change_callback:
                 self.frame_change_callback(frame)
 
-            self._rebuild_image()
+            self.rebuild_image()
 
     def get_current_frame(self) -> float:
         """Get the current frame"""
@@ -1651,7 +1651,7 @@ class TimelinePanel(UIElement):
             event_data = {'ui_element': self}
             pygame.event.post(pygame.event.Event(UI_TIMELINE_PLAYBACK_STARTED, event_data))
 
-            self._rebuild_image()
+            self.rebuild_image()
 
     def pause(self):
         """Pause playback"""
@@ -1661,7 +1661,7 @@ class TimelinePanel(UIElement):
             event_data = {'ui_element': self}
             pygame.event.post(pygame.event.Event(UI_TIMELINE_PLAYBACK_PAUSED, event_data))
 
-            self._rebuild_image()
+            self.rebuild_image()
 
     def stop(self):
         """Stop playback"""
@@ -1670,7 +1670,7 @@ class TimelinePanel(UIElement):
         event_data = {'ui_element': self}
         pygame.event.post(pygame.event.Event(UI_TIMELINE_PLAYBACK_STOPPED, event_data))
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def add_keyframe(self, layer_id: str, property_name: str, frame: int, value: Any,
                      interpolation: InterpolationType = InterpolationType.LINEAR):
@@ -1703,7 +1703,7 @@ class TimelinePanel(UIElement):
         if self.keyframe_change_callback:
             self.keyframe_change_callback(layer_id, property_name, frame, value)
 
-        self._rebuild_image()
+        self.rebuild_image()
         return True
 
     def remove_keyframe(self, layer_id: str, property_name: str, frame: int):
@@ -1728,7 +1728,7 @@ class TimelinePanel(UIElement):
             }
             pygame.event.post(pygame.event.Event(UI_TIMELINE_KEYFRAME_REMOVED, event_data))
 
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
@@ -1759,7 +1759,7 @@ class TimelinePanel(UIElement):
                         min(self.config.interaction.max_zoom, self.zoom))
         self.scroll_x = 0
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def set_zoom(self, zoom: float):
         """Set timeline zoom level"""
@@ -1770,7 +1770,7 @@ class TimelinePanel(UIElement):
         if old_zoom != self.zoom:
             event_data = {'zoom': self.zoom, 'ui_element': self}
             pygame.event.post(pygame.event.Event(UI_TIMELINE_ZOOM_CHANGED, event_data))
-            self._rebuild_image()
+            self.rebuild_image()
 
     def set_frame_change_callback(self, callback: Callable[[float], None]):
         """Set callback for frame changes"""
@@ -1787,26 +1787,26 @@ class TimelinePanel(UIElement):
     def clear_selection(self):
         """Clear keyframe selection"""
         self.selection.clear()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def refresh(self):
         """Refresh the timeline display"""
         self._last_rebuild_state = None  # Force rebuild
-        self._rebuild_image()
+        self.rebuild_image()
 
     # Configuration update methods
     def update_layout_config(self, layout_config: TimelineLayoutConfig):
         """Update layout configuration and rebuild"""
         self.config.layout = copy.deepcopy(layout_config)
-        self._setup_layout()
+        self.setup_layout()
         self._last_rebuild_state = None
-        self._rebuild_image()
+        self.rebuild_image()
 
     def update_behavior_config(self, behavior_config: TimelineBehaviorConfig):
         """Update behavior configuration"""
         self.config.behavior = copy.deepcopy(behavior_config)
         self._last_rebuild_state = None
-        self._rebuild_image()
+        self.rebuild_image()
 
     def update_interaction_config(self, interaction_config: TimelineInteractionConfig):
         """Update interaction configuration"""

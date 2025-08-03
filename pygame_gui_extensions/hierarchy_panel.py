@@ -497,7 +497,7 @@ class HierarchyPanel(UIElement):
 
         # Set up the initial state
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _get_node_at_position(self, pos: tuple) -> Optional[HierarchyNode]:
         """Get the node at the given position"""
@@ -613,7 +613,7 @@ class HierarchyPanel(UIElement):
         self._update_theme_data()
         self.icon_manager.clear_cache()
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _can_accept_children(self, node: HierarchyNode) -> bool:
         """Check if a node can accept children based on configuration"""
@@ -685,12 +685,12 @@ class HierarchyPanel(UIElement):
         total_height = len(self.visible_nodes) * self.config.layout.node_height
         self.max_scroll = max(0, total_height - self.rect.height)
 
-        self._rebuild_image()
+        self.rebuild_image()
 
         if HIERARCHY_DEBUG:
             print(f"UI rebuilt: {len(self.visible_nodes)} visible nodes")
 
-    def _rebuild_image(self):
+    def rebuild_image(self):
         """Rebuild the image surface"""
         bg_color = self.themed_colors.get('dark_bg', pygame.Color(40, 40, 40))
         self.image.fill(bg_color)
@@ -966,7 +966,7 @@ class HierarchyPanel(UIElement):
 
         if old_scroll != self.scroll_y:
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
@@ -1064,7 +1064,7 @@ class HierarchyPanel(UIElement):
                 node_ui.drop_position = self.drop_position
                 break
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _perform_drop_operation(self):
         """Perform the actual drop operation"""
@@ -1135,7 +1135,7 @@ class HierarchyPanel(UIElement):
     def refresh(self):
         """Refresh the hierarchy display"""
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def load_icons_from_directory(self, icon_directory: str):
         """Load custom icons from a directory"""
