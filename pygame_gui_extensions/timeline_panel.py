@@ -1576,10 +1576,8 @@ class TimelinePanel(UIElement):
 
         # Handle playback
         if self.playback_state == PlaybackState.PLAYING and self.clip:
-            current_time = time_module.time()
-            elapsed = current_time - self.last_playback_time
-            frame_delta = elapsed * self.clip.fps
-
+            # Use time_delta directly (already in seconds) - this is the key fix
+            frame_delta = time_delta * self.clip.fps
             new_frame = self.current_frame + frame_delta
 
             if new_frame >= self.clip.length:
@@ -1590,7 +1588,6 @@ class TimelinePanel(UIElement):
                     self.stop()
 
             self.set_current_frame(new_frame)
-            self.last_playback_time = current_time
 
             # Auto-scroll during playback
             if self.config.behavior.auto_scroll_on_playback:
@@ -1616,14 +1613,15 @@ class TimelinePanel(UIElement):
     def set_current_frame(self, frame: float):
         """Set the current frame"""
         if self.clip:
-            frame = max(0, min(self.clip.length, int(frame)))
+            frame = max(0, min(self.clip.length, frame))  # Keep as float for smooth playback
         else:
-            frame = max(0, int(frame))
+            frame = max(0, frame)
 
         old_frame = self.current_frame
         self.current_frame = frame
 
-        if old_frame != frame:
+        # Use small threshold for float comparison to avoid excessive updates
+        if abs(old_frame - frame) > 0.001:
             # Fire frame change event
             event_data = {
                 'frame': frame,
@@ -1646,12 +1644,10 @@ class TimelinePanel(UIElement):
         """Start playback"""
         if self.playback_state != PlaybackState.PLAYING:
             self.playback_state = PlaybackState.PLAYING
-            self.last_playback_time = time_module.time()
 
             event_data = {'ui_element': self}
             pygame.event.post(pygame.event.Event(UI_TIMELINE_PLAYBACK_STARTED, event_data))
-
-            self.rebuild_image()
+            # Removed rebuild_image() call - set_current_frame handles this
 
     def pause(self):
         """Pause playback"""

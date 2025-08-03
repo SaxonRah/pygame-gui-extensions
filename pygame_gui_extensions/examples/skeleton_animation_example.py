@@ -691,27 +691,43 @@ class SkeletonAnimationTool:
                     print(f"  Layer '{layer.name}': {total_kf} keyframes, visible: {layer.visible}")
 
     def _on_frame_changed(self, frame: float):
-        """Handle frame changes from timeline"""
+        """Handle frame changes from timeline - OPTIMIZED"""
         self.current_frame = frame
 
-        # Apply animation to all bones
+        # Only update bones that have animation data
+        changed_bones = set()
+
         for bone_id, bone in self.skeleton_system.bones.items():
             layer = self.animation_clip.get_layer(bone_id)
-            if layer:
+            if layer and layer.visible:  # Check if layer is visible
+                bone_changed = False
                 for curve in layer.curves:
-                    value = curve.get_value_at_frame(frame)
-                    if value is not None and hasattr(bone, curve.property_name):
-                        setattr(bone, curve.property_name, value)
+                    if curve.enabled and curve.keyframes:  # Only if curve has keyframes
+                        value = curve.get_value_at_frame(frame)
+                        if value is not None and hasattr(bone, curve.property_name):
+                            old_value = getattr(bone, curve.property_name)
+                            if abs(old_value - value) > 0.01:  # Only update if significant change
+                                setattr(bone, curve.property_name, value)
+                                bone_changed = True
 
-        # Update property panel if bone is selected (but don't cause rebuild loop)
-        if self.skeleton_system.selected_bone:
-            # Just update the values without rebuilding
-            for prop_id, renderer in self.property_panel.renderers.items():
-                if hasattr(self.skeleton_system.selected_bone, prop_id):
-                    new_value = getattr(self.skeleton_system.selected_bone, prop_id)
-                    renderer.property.value = new_value
-            # Only rebuild the image, not the full UI
-            self.property_panel.rebuild_image()
+                if bone_changed:
+                    changed_bones.add(bone_id)
+
+        # Only update property panel if selected bone changed AND not during playback
+        if (self.skeleton_system.selected_bone and
+                self.skeleton_system.selected_bone.id in changed_bones and
+                self.timeline_panel.playback_state != PlaybackState.PLAYING):
+
+            # Defer property panel update to avoid blocking playback
+            def update_property_panel():
+                for prop_id, renderer in self.property_panel.renderers.items():
+                    if hasattr(self.skeleton_system.selected_bone, prop_id):
+                        new_value = getattr(self.skeleton_system.selected_bone, prop_id)
+                        renderer.property.value = new_value
+                self.property_panel.rebuild_image()
+
+            # Schedule update for next frame instead of doing it immediately
+            pygame.event.post(pygame.event.Event(pygame.USEREVENT + 1000, {'callback': update_property_panel}))
 
     def _on_property_changed(self, prop_id: str, old_value: Any, new_value: Any):
         """Handle property changes from the property panel"""
@@ -890,12 +906,8 @@ class SkeletonAnimationTool:
                         # Toggle playback
                         # self.timeline_panel._handle_key_event(event)
                         # self.timeline_panel._toggle_playback()
-                        if self.timeline_panel.playback_state == PlaybackState.STOPPED or \
-                           self.timeline_panel.playback_state == PlaybackState.PAUSED:
-                            self.timeline_panel.playback_state = PlaybackState.PLAYING
-                        else:
-                            self.timeline_panel.playback_state = PlaybackState.PAUSED
-                        ...
+                        self.timeline_panel._toggle_playback()
+
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left click
