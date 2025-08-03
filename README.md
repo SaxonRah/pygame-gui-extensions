@@ -47,6 +47,15 @@ For keyframe animation:
 - Playback controls
 - Integration with the hierarchy for animated objects
 ![Timeline Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/TimelinePanel.png "Timeline Panel")
+
+### **Mini-map/Navigator Panel**
+For large content areas:
+- Thumbnail view of large canvases
+- Viewport indicator and navigation
+- Zoom controls
+- Works great with node editors or large hierarchies
+![Navigator Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NavigatorPanel.png "Navigator Panel")
+
 ---
 
 # Work in Progess Panels
@@ -59,14 +68,6 @@ Media asset management:
 - Search and tagging
 - Drag-and-drop to hierarchy
 ![Asset Browser Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/AssetBrowserPanel.png "Asset Browser Panel")
-
-### **Mini-map/Navigator Panel**
-For large content areas:
-- Thumbnail view of large canvases
-- Viewport indicator and navigation
-- Zoom controls
-- Works great with node editors or large hierarchies
-![Navigator Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NavigatorPanel.png "Navigator Panel")
 
 ---
 
