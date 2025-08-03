@@ -5,10 +5,7 @@ from pygame_gui.core.interfaces import IContainerLikeInterface
 from typing import List, Optional, Dict, Any, Union, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-import os
-import json
-import colorsys
-import math
+import copy
 
 try:
     from pygame_gui.core.interfaces.gui_font_interface import IGUIFontInterface
@@ -16,14 +13,6 @@ except ImportError:
     IGUIFontInterface = None
 
 PROPERTY_DEBUG = True
-
-# Constants
-PROPERTY_ROW_HEIGHT = 28
-SECTION_HEADER_HEIGHT = 24
-INDENT_SIZE = 16
-CONTROL_SPACING = 4
-MIN_LABEL_WIDTH = 80
-COLOR_PICKER_SIZE = 16
 
 # Define custom pygame-gui events
 UI_PROPERTY_CHANGED = pygame.USEREVENT + 50
@@ -56,6 +45,170 @@ class PropertyFlags(Enum):
     HIDDEN = "hidden"
     ADVANCED = "advanced"
     REQUIRED = "required"
+
+
+@dataclass
+class PropertyLayoutConfig:
+    """Layout and spacing configuration for property panel"""
+    # Row and section sizing
+    property_row_height: int = 28
+    section_header_height: int = 24
+
+    # Indentation and spacing
+    indent_size: int = 16
+    control_spacing: int = 4
+
+    # Label configuration
+    min_label_width: int = 80
+    label_width_ratio: float = 0.4  # Ratio of row width for labels
+
+    # Control sizes
+    color_picker_size: int = 16
+    checkbox_size: int = 16
+    expand_button_size: int = 12
+    expand_triangle_size: int = 4
+
+    # Margins and paddings
+    label_padding_left: int = 4
+    label_padding_right: int = 4
+    control_padding: int = 4
+    text_cursor_padding: int = 4
+
+    # Visual elements
+    border_width: int = 1
+    focus_border_width: int = 2
+    dropdown_max_height: int = 200
+    color_picker_width: int = 220
+    color_picker_height: int = 200
+
+    # Icon and visual sizes
+    validation_icon_radius: int = 3
+    validation_icon_margin: int = 10
+
+    # Text rendering
+    fallback_font_size: int = 12
+
+
+@dataclass
+class PropertyInteractionConfig:
+    """Interaction and timing configuration"""
+    # Timing
+    double_click_time: int = 500  # milliseconds
+    cursor_blink_time: float = 0.5  # seconds
+
+    # Scroll behavior
+    scroll_speed: int = 3
+    scroll_margin: int = 10
+
+    # Drag and drop
+    drag_threshold: int = 5  # pixels before drag starts
+
+    # Validation timing
+    validation_delay: float = 0.3  # seconds after typing stops
+
+    # Color picker interaction
+    color_picker_sv_chunk_size: int = 4  # for performance
+    color_picker_cache_limit: int = 10
+
+
+@dataclass
+class PropertyBehaviorConfig:
+    """Behavior configuration for property panel"""
+    # Editing behavior
+    live_editing: bool = True  # Update values while typing
+    auto_commit_on_focus_loss: bool = True
+    escape_cancels_edit: bool = True
+    enter_confirms_edit: bool = True
+
+    # UI behavior
+    show_tooltips: bool = True
+    show_reset_buttons: bool = True
+    show_advanced_properties: bool = False
+    auto_scroll_to_changed: bool = False
+
+    # Validation behavior
+    validate_on_change: bool = True
+    highlight_invalid: bool = True
+    show_validation_icons: bool = True
+
+    # Keyboard navigation
+    tab_navigation: bool = True
+    arrow_key_navigation: bool = True
+
+    # Section behavior
+    remember_section_states: bool = True
+    animate_section_toggle: bool = False
+    animation_duration: float = 0.2  # seconds
+
+
+@dataclass
+class PropertyConfig:
+    """Complete configuration for the property inspector"""
+    # Sub-configurations
+    layout: PropertyLayoutConfig = field(default_factory=PropertyLayoutConfig)
+    interaction: PropertyInteractionConfig = field(default_factory=PropertyInteractionConfig)
+    behavior: PropertyBehaviorConfig = field(default_factory=PropertyBehaviorConfig)
+
+    # Convenience properties for backward compatibility
+    @property
+    def row_height(self) -> int:
+        return self.layout.property_row_height
+
+    @property
+    def section_header_height(self) -> int:
+        return self.layout.section_header_height
+
+    @property
+    def indent_size(self) -> int:
+        return self.layout.indent_size
+
+    @property
+    def label_width_ratio(self) -> float:
+        return self.layout.label_width_ratio
+
+    @property
+    def min_label_width(self) -> int:
+        return self.layout.min_label_width
+
+    @property
+    def control_spacing(self) -> int:
+        return self.layout.control_spacing
+
+    @property
+    def live_editing(self) -> bool:
+        return self.behavior.live_editing
+
+    @property
+    def show_tooltips(self) -> bool:
+        return self.behavior.show_tooltips
+
+    @property
+    def show_reset_buttons(self) -> bool:
+        return self.behavior.show_reset_buttons
+
+    @property
+    def show_advanced_properties(self) -> bool:
+        return self.behavior.show_advanced_properties
+
+    @property
+    def auto_scroll_to_changed(self) -> bool:
+        return self.behavior.auto_scroll_to_changed
+
+    @property
+    def validate_on_change(self) -> bool:
+        return self.behavior.validate_on_change
+
+    @property
+    def highlight_invalid(self) -> bool:
+        return self.behavior.highlight_invalid
+
+    @property
+    def tab_navigation(self) -> bool:
+        return self.behavior.tab_navigation
+
+    @property
+    def enter_confirms_edit(self) -> bool:
+        return self.behavior.enter_confirms_edit
 
 
 @dataclass
@@ -171,35 +324,95 @@ class PropertySection:
     properties: List[PropertySchema] = field(default_factory=list)
 
 
-@dataclass
-class PropertyConfig:
-    """Configuration for the property inspector"""
-    # Layout
-    row_height: int = PROPERTY_ROW_HEIGHT
-    section_header_height: int = SECTION_HEADER_HEIGHT
-    indent_size: int = INDENT_SIZE
-    label_width_ratio: float = 0.4  # Ratio of row width for labels
-    min_label_width: int = MIN_LABEL_WIDTH
-    control_spacing: int = CONTROL_SPACING
+class PropertyThemeManager:
+    """Manages theming for the property panel"""
 
-    # Behavior
-    live_editing: bool = True  # Update values while typing
-    show_tooltips: bool = True
-    show_reset_buttons: bool = True
-    show_advanced_properties: bool = False
-    auto_scroll_to_changed: bool = False
+    def __init__(self, ui_manager: pygame_gui.UIManager, element_ids: List[str]):
+        self.ui_manager = ui_manager
+        self.element_ids = element_ids
+        self.themed_colors = {}
+        self.themed_font = None
+        self._update_theme_data()
 
-    # Validation
-    validate_on_change: bool = True
-    highlight_invalid: bool = True
+    def _update_theme_data(self):
+        """Update theme-dependent data with comprehensive fallbacks"""
 
-    # Keyboard navigation
-    tab_navigation: bool = True
-    enter_confirms_edit: bool = True
+        # Default color mappings with fallbacks
+        color_mappings = {
+            'dark_bg': pygame.Color(45, 45, 45),
+            'normal_text': pygame.Color(255, 255, 255),
+            'secondary_text': pygame.Color(180, 180, 180),
+            'readonly_text': pygame.Color(150, 150, 150),
+            'section_bg': pygame.Color(35, 35, 35),
+            'section_text': pygame.Color(200, 200, 200),
+            'control_bg': pygame.Color(60, 60, 60),
+            'control_text': pygame.Color(255, 255, 255),
+            'control_border': pygame.Color(100, 100, 100),
+            'focused_bg': pygame.Color(50, 80, 120),
+            'focused_border': pygame.Color(120, 160, 255),
+            'hovered_bg': pygame.Color(50, 50, 50),
+            'selected_bg': pygame.Color(70, 130, 180),
+            'error_bg': pygame.Color(60, 20, 20),
+            'error_text': pygame.Color(255, 100, 100),
+            'accent': pygame.Color(100, 200, 100),
+            'normal_border': pygame.Color(80, 80, 80),
+            'warning_bg': pygame.Color(80, 60, 20),
+            'warning_text': pygame.Color(255, 200, 100),
+            'valid_bg': pygame.Color(20, 60, 20),
+            'valid_text': pygame.Color(100, 255, 100),
+        }
+
+        try:
+            self.themed_colors = {}
+            theme = self.ui_manager.get_theme()
+
+            for color_id, default_color in color_mappings.items():
+                try:
+                    if hasattr(theme, 'get_colour_or_gradient'):
+                        color = theme.get_colour_or_gradient(color_id, self.element_ids)
+                        self.themed_colors[color_id] = color if color else default_color
+                    else:
+                        self.themed_colors[color_id] = default_color
+                except Exception:
+                    self.themed_colors[color_id] = default_color
+
+            # Get themed font
+            try:
+                if hasattr(theme, 'get_font'):
+                    self.themed_font = theme.get_font(self.element_ids)
+                else:
+                    raise Exception("No font method")
+            except Exception:
+                try:
+                    self.themed_font = pygame.font.SysFont('Arial', 12)
+                except:
+                    self.themed_font = pygame.font.Font(None, 12)
+
+        except Exception as e:
+            if PROPERTY_DEBUG:
+                print(f"Error getting theme data: {e}")
+            # Complete fallback
+            self.themed_colors = color_mappings
+            try:
+                self.themed_font = pygame.font.SysFont('Arial', 12)
+            except:
+                self.themed_font = pygame.font.Font(None, 12)
+
+    def rebuild_from_changed_theme_data(self):
+        """Called when theme data changes"""
+        self._update_theme_data()
+
+    def get_color(self, color_id: str, fallback: pygame.Color = None) -> pygame.Color:
+        """Get a themed color with fallback"""
+        return self.themed_colors.get(color_id, fallback or pygame.Color(255, 255, 255))
+
+    def get_font(self):
+        """Get the themed font"""
+        return self.themed_font
 
 
 class PropertyRenderer:
-    """Base class for property renderers"""
+    """Base class for property renderers with improved flexibility"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         self.property = property_schema
@@ -212,9 +425,13 @@ class PropertyRenderer:
         self.label_rect = pygame.Rect(0, 0, 0, 0)
         self.control_rect = pygame.Rect(0, 0, 0, 0)
 
-    # TODO: use get_local_rect?
-    # adjusted = self.get_local_rect(comp_rect)
+        # Animation and timing
+        self.last_edit_time = 0
+        self.blink_timer = 0
+        self.show_cursor = True
+
     def get_local_rect(self, abs_rect: pygame.Rect) -> pygame.Rect:
+        """Convert absolute rect to local coordinates"""
         return pygame.Rect(abs_rect.move(-self.rect.x, -self.rect.y))
 
     def set_geometry(self, rect: pygame.Rect, label_width: int):
@@ -222,35 +439,36 @@ class PropertyRenderer:
         self.rect = rect
         self.label_rect = pygame.Rect(rect.x, rect.y, label_width, rect.height)
         self.control_rect = pygame.Rect(
-            rect.x + label_width + self.config.control_spacing,
+            rect.x + label_width + self.config.layout.control_spacing,
             rect.y,
-            rect.width - label_width - self.config.control_spacing,
+            rect.width - label_width - self.config.layout.control_spacing,
             rect.height
         )
 
-    def draw(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def draw(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
         """Draw the property renderer"""
-        self._draw_background(surface, colors)
-        self._draw_label(surface, font, colors)
-        self._draw_control(surface, font, colors)
-        self._draw_validation_error(surface, font, colors)
+        self._draw_background(surface, theme_manager)
+        self._draw_label(surface, theme_manager)
+        self._draw_control(surface, theme_manager)
+        self._draw_validation_elements(surface, theme_manager)
 
-    def _draw_background(self, surface: pygame.Surface, colors: Dict[str, pygame.Color]):
+    def _draw_background(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
         """Draw background highlighting"""
-        if self.validation_error and self.config.highlight_invalid:
-            pygame.draw.rect(surface, colors.get('error_bg', pygame.Color(60, 20, 20)), self.rect)
+        if self.validation_error and self.config.behavior.highlight_invalid:
+            pygame.draw.rect(surface, theme_manager.get_color('error_bg'), self.rect)
         elif self.is_focused:
-            pygame.draw.rect(surface, colors.get('focused_bg', pygame.Color(50, 80, 120)), self.rect)
+            pygame.draw.rect(surface, theme_manager.get_color('focused_bg'), self.rect)
         elif self.is_hovered:
-            pygame.draw.rect(surface, colors.get('hovered_bg', pygame.Color(45, 45, 45)), self.rect)
+            pygame.draw.rect(surface, theme_manager.get_color('hovered_bg'), self.rect)
 
-    def _draw_label(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def _draw_label(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
         """Draw the property label"""
-        text_color = colors.get('normal_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('normal_text')
         if self.property.is_readonly():
-            text_color = colors.get('readonly_text', pygame.Color(150, 150, 150))
+            text_color = theme_manager.get_color('readonly_text')
 
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(self.property.label, text_color)
             else:
@@ -258,32 +476,100 @@ class PropertyRenderer:
 
             # Center vertically in label rect
             y_offset = (self.label_rect.height - text_surface.get_height()) // 2
-            surface.blit(text_surface, (self.label_rect.x + 4, self.label_rect.y + y_offset))
+            surface.blit(text_surface, (
+                self.label_rect.x + self.config.layout.label_padding_left,
+                self.label_rect.y + y_offset
+            ))
 
         except Exception as e:
             if PROPERTY_DEBUG:
                 print(f"Error rendering label for {self.property.id}: {e}")
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
         """Draw the property control - override in subclasses"""
         pass
 
-    def _draw_validation_error(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
-        """Draw validation error indicator"""
-        if self.validation_error:
-            # Draw error icon or indicator
-            error_color = colors.get('error_text', pygame.Color(255, 100, 100))
-            pygame.draw.circle(surface, error_color,
-                               (self.rect.right - 10, self.rect.centery), 3)
+    def _draw_validation_elements(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        """Draw validation error indicator and reset button"""
+        if self.validation_error and self.config.behavior.show_validation_icons:
+            # Draw error icon
+            error_color = theme_manager.get_color('error_text')
+            icon_x = self.rect.right - self.config.layout.validation_icon_margin
+            icon_y = self.rect.centery
+            pygame.draw.circle(surface, error_color, (icon_x, icon_y),
+                               self.config.layout.validation_icon_radius)
+
+        # Draw reset button if enabled and has default value
+        if (self.config.behavior.show_reset_buttons and
+                self.property.default_value is not None and
+                not self.property.is_readonly()):
+            # Simple reset button (could be enhanced with proper button rendering)
+            reset_x = self.rect.right - self.config.layout.validation_icon_margin - 20
+            reset_y = self.rect.centery
+            reset_color = theme_manager.get_color('secondary_text')
+            pygame.draw.circle(surface, reset_color, (reset_x, reset_y),
+                               self.config.layout.validation_icon_radius)
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
         """Handle input events - return True if consumed"""
+
+        # CHANGE: Add reset button click handling
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Check if clicking on reset button
+            if (self.config.behavior.show_reset_buttons and
+                    self.property.default_value is not None and
+                    not self.property.is_readonly()):
+
+                reset_x = self.rect.right - self.config.layout.validation_icon_margin - 20
+                reset_y = self.rect.centery
+                reset_radius = self.config.layout.validation_icon_radius
+
+                # Check if click is within reset button circle
+                click_x, click_y = relative_pos
+                distance = ((click_x - reset_x) ** 2 + (click_y - reset_y) ** 2) ** 0.5
+
+                if distance <= reset_radius + 2:  # Add small tolerance
+                    # Reset to default value
+                    self.set_value(self.property.default_value)
+                    return True
+
         return False
+
+    def _check_reset_button_click(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+        """Check if reset button was clicked - returns True if handled"""
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and
+                self.config.behavior.show_reset_buttons and
+                self.property.default_value is not None and
+                not self.property.is_readonly()):
+
+            reset_x = self.rect.right - self.config.layout.validation_icon_margin - 20
+            reset_y = self.rect.centery
+            reset_radius = self.config.layout.validation_icon_radius
+
+            # Check if click is within reset button circle
+            click_x, click_y = relative_pos
+            distance = ((click_x - reset_x) ** 2 + (click_y - reset_y) ** 2) ** 0.5
+
+            if distance <= reset_radius + 3:  # Small tolerance for easier clicking
+                # Reset to default value
+                self.set_value(self.property.default_value)
+                return True
+
+        return False
+
+    def update(self, time_delta: float):
+        """Update renderer state (for animations, etc.)"""
+        if self.is_editing:
+            self.blink_timer += time_delta
+            if self.blink_timer > self.config.interaction.cursor_blink_time:
+                self.show_cursor = not self.show_cursor
+                self.blink_timer = 0
 
     def start_editing(self):
         """Start editing this property"""
         if not self.property.is_readonly():
             self.is_editing = True
+            self.last_edit_time = pygame.time.get_ticks()
 
     def stop_editing(self, save: bool = True):
         """Stop editing this property"""
@@ -307,7 +593,7 @@ class PropertyRenderer:
 
 
 class TextPropertyRenderer(PropertyRenderer):
-    """Renderer for text properties"""
+    """Renderer for text properties with improved features"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         super().__init__(property_schema, config)
@@ -315,8 +601,7 @@ class TextPropertyRenderer(PropertyRenderer):
         self.cursor_pos = 0
         self.selection_start = 0
         self.selection_end = 0
-        self.blink_timer = 0
-        self.show_cursor = True
+        self.scroll_offset = 0
 
     def start_editing(self):
         super().start_editing()
@@ -331,38 +616,41 @@ class TextPropertyRenderer(PropertyRenderer):
             self.set_value(self.text_input)
         super().stop_editing(save)
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        layout = self.config.layout
+
         # Draw text input box
-        box_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        box_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
 
         if self.is_editing:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
+            border_color = theme_manager.get_color('focused_border')
 
         pygame.draw.rect(surface, box_color, self.control_rect)
-        pygame.draw.rect(surface, border_color, self.control_rect, 1)
+        pygame.draw.rect(surface, border_color, self.control_rect, layout.border_width)
 
         # Draw text
         display_text = self.text_input if self.is_editing else str(self.property.value or "")
-        text_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('control_text')
 
         if self.property.is_readonly():
-            text_color = colors.get('readonly_text', pygame.Color(150, 150, 150))
+            text_color = theme_manager.get_color('readonly_text')
 
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(display_text, text_color)
             else:
                 text_surface = font.render(display_text, True, text_color)
 
-            # Clip text to control rect
+            # Calculate text position with scroll offset
             text_rect = text_surface.get_rect()
             text_rect.centery = self.control_rect.centery
-            text_rect.x = self.control_rect.x + 4
+            text_rect.x = self.control_rect.x + layout.control_padding - self.scroll_offset
 
             # Create clipping rect
             clip_rect = self.control_rect.copy()
-            clip_rect.width -= 8  # Padding
+            clip_rect.width -= layout.control_padding * 2
 
             surface.set_clip(clip_rect)
             surface.blit(text_surface, text_rect)
@@ -371,71 +659,105 @@ class TextPropertyRenderer(PropertyRenderer):
             # Draw cursor when editing
             if self.is_editing and self.show_cursor:
                 cursor_x = text_rect.x + font.size(display_text[:self.cursor_pos])[0]
-                if self.control_rect.contains(cursor_x, self.control_rect.y, 1, self.control_rect.height):
+                if clip_rect.left <= cursor_x <= clip_rect.right:
                     pygame.draw.line(surface, text_color,
-                                     (cursor_x, self.control_rect.y + 4),
-                                     (cursor_x, self.control_rect.bottom - 4))
+                                     (cursor_x, self.control_rect.y + layout.text_cursor_padding),
+                                     (cursor_x, self.control_rect.bottom - layout.text_cursor_padding))
 
         except Exception as e:
             if PROPERTY_DEBUG:
                 print(f"Error rendering text control: {e}")
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.control_rect.collidepoint(relative_pos):
                 if not self.is_editing:
                     self.start_editing()
                 else:
-                    # Position cursor
-                    # This is a simplified cursor positioning
-                    self.cursor_pos = len(self.text_input)
+                    # Position cursor based on click position
+                    self._position_cursor_from_mouse(relative_pos)
                 return True
 
         elif event.type == pygame.KEYDOWN and self.is_editing:
-            if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
-                self.stop_editing(True)
-                return True
-            elif event.key == pygame.K_ESCAPE:
-                self.stop_editing(False)
-                return True
-            elif event.key == pygame.K_BACKSPACE:
-                if self.cursor_pos > 0:
-                    self.text_input = self.text_input[:self.cursor_pos - 1] + self.text_input[self.cursor_pos:]
-                    self.cursor_pos -= 1
-                return True
-            elif event.key == pygame.K_DELETE:
-                if self.cursor_pos < len(self.text_input):
-                    self.text_input = self.text_input[:self.cursor_pos] + self.text_input[self.cursor_pos + 1:]
-                return True
-            elif event.key == pygame.K_LEFT:
-                self.cursor_pos = max(0, self.cursor_pos - 1)
-                return True
-            elif event.key == pygame.K_RIGHT:
-                self.cursor_pos = min(len(self.text_input), self.cursor_pos + 1)
-                return True
-            elif event.key == pygame.K_HOME:
-                self.cursor_pos = 0
-                return True
-            elif event.key == pygame.K_END:
-                self.cursor_pos = len(self.text_input)
-                return True
+            return self._handle_key_event(event)
 
         elif event.type == pygame.TEXTINPUT and self.is_editing:
             self.text_input = self.text_input[:self.cursor_pos] + event.text + self.text_input[self.cursor_pos:]
             self.cursor_pos += len(event.text)
+            self._update_scroll()
             return True
 
         return False
 
+    def _handle_key_event(self, event: pygame.event.Event) -> bool:
+        """Handle keyboard input with improved navigation"""
+        if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+            if self.config.behavior.enter_confirms_edit:
+                self.stop_editing(True)
+                return True
+        elif event.key == pygame.K_ESCAPE:
+            if self.config.behavior.escape_cancels_edit:
+                self.stop_editing(False)
+                return True
+        elif event.key == pygame.K_BACKSPACE:
+            if self.cursor_pos > 0:
+                self.text_input = self.text_input[:self.cursor_pos - 1] + self.text_input[self.cursor_pos:]
+                self.cursor_pos -= 1
+                self._update_scroll()
+            return True
+        elif event.key == pygame.K_DELETE:
+            if self.cursor_pos < len(self.text_input):
+                self.text_input = self.text_input[:self.cursor_pos] + self.text_input[self.cursor_pos + 1:]
+                self._update_scroll()
+            return True
+        elif event.key == pygame.K_LEFT:
+            self.cursor_pos = max(0, self.cursor_pos - 1)
+            self._update_scroll()
+            return True
+        elif event.key == pygame.K_RIGHT:
+            self.cursor_pos = min(len(self.text_input), self.cursor_pos + 1)
+            self._update_scroll()
+            return True
+        elif event.key == pygame.K_HOME:
+            self.cursor_pos = 0
+            self._update_scroll()
+            return True
+        elif event.key == pygame.K_END:
+            self.cursor_pos = len(self.text_input)
+            self._update_scroll()
+            return True
+        elif event.key == pygame.K_a and pygame.key.get_pressed()[pygame.K_LCTRL]:
+            # Select all
+            self.selection_start = 0
+            self.selection_end = len(self.text_input)
+            return True
+
+        return False
+
+    def _position_cursor_from_mouse(self, pos: Tuple[int, int]):
+        """Position cursor based on mouse click"""
+        # Simplified cursor positioning - could be improved
+        self.cursor_pos = len(self.text_input)
+
+    def _update_scroll(self):
+        """Update scroll offset to keep cursor visible"""
+        # Simplified scroll update - could be improved with proper text measurement
+        self.scroll_offset = 0
+
 
 class NumberPropertyRenderer(PropertyRenderer):
-    """Renderer for numeric properties"""
+    """Renderer for numeric properties with improved configuration"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         super().__init__(property_schema, config)
         self.text_input = ""
         self.cursor_pos = 0
         self.is_float = property_schema.step is None or property_schema.step != int(property_schema.step or 1)
+        self.scroll_offset = 0
 
     def start_editing(self):
         super().start_editing()
@@ -459,16 +781,18 @@ class NumberPropertyRenderer(PropertyRenderer):
                 pass  # Keep old value
         super().stop_editing(save)
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
-        # Similar to text renderer but with number-specific formatting
-        box_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        layout = self.config.layout
+
+        # Draw number input box
+        box_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
 
         if self.is_editing:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
+            border_color = theme_manager.get_color('focused_border')
 
         pygame.draw.rect(surface, box_color, self.control_rect)
-        pygame.draw.rect(surface, border_color, self.control_rect, 1)
+        pygame.draw.rect(surface, border_color, self.control_rect, layout.border_width)
 
         # Draw number
         if self.is_editing:
@@ -480,11 +804,12 @@ class NumberPropertyRenderer(PropertyRenderer):
             else:
                 display_text = str(int(value))
 
-        text_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('control_text')
         if self.property.is_readonly():
-            text_color = colors.get('readonly_text', pygame.Color(150, 150, 150))
+            text_color = theme_manager.get_color('readonly_text')
 
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(display_text, text_color)
             else:
@@ -492,22 +817,33 @@ class NumberPropertyRenderer(PropertyRenderer):
 
             text_rect = text_surface.get_rect()
             text_rect.centery = self.control_rect.centery
-            text_rect.x = self.control_rect.x + 4
+            text_rect.x = self.control_rect.x + layout.control_padding - self.scroll_offset
 
+            # Create clipping rect
+            clip_rect = self.control_rect.copy()
+            clip_rect.width -= layout.control_padding * 2
+
+            surface.set_clip(clip_rect)
             surface.blit(text_surface, text_rect)
+            surface.set_clip(None)
 
             # Draw cursor when editing
-            if self.is_editing:
+            if self.is_editing and self.show_cursor:
                 cursor_x = text_rect.x + font.size(display_text[:self.cursor_pos])[0]
-                pygame.draw.line(surface, text_color,
-                                 (cursor_x, self.control_rect.y + 4),
-                                 (cursor_x, self.control_rect.bottom - 4))
+                if clip_rect.left <= cursor_x <= clip_rect.right:
+                    pygame.draw.line(surface, text_color,
+                                     (cursor_x, self.control_rect.y + layout.text_cursor_padding),
+                                     (cursor_x, self.control_rect.bottom - layout.text_cursor_padding))
 
         except Exception as e:
             if PROPERTY_DEBUG:
                 print(f"Error rendering number control: {e}")
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.control_rect.collidepoint(relative_pos):
                 if not self.is_editing:
@@ -516,11 +852,13 @@ class NumberPropertyRenderer(PropertyRenderer):
 
         elif event.type == pygame.KEYDOWN and self.is_editing:
             if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
-                self.stop_editing(True)
-                return True
+                if self.config.behavior.enter_confirms_edit:
+                    self.stop_editing(True)
+                    return True
             elif event.key == pygame.K_ESCAPE:
-                self.stop_editing(False)
-                return True
+                if self.config.behavior.escape_cancels_edit:
+                    self.stop_editing(False)
+                    return True
             elif event.key == pygame.K_BACKSPACE:
                 if self.cursor_pos > 0:
                     self.text_input = self.text_input[:self.cursor_pos - 1] + self.text_input[self.cursor_pos:]
@@ -552,30 +890,32 @@ class NumberPropertyRenderer(PropertyRenderer):
 
 
 class BooleanPropertyRenderer(PropertyRenderer):
-    """Renderer for boolean properties"""
+    """Renderer for boolean properties with improved configuration"""
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
-        checkbox_size = min(16, self.control_rect.height - 4)
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        layout = self.config.layout
+
+        checkbox_size = min(layout.checkbox_size, self.control_rect.height - 4)
         checkbox_rect = pygame.Rect(
-            self.control_rect.x + 4,
+            self.control_rect.x + layout.control_padding,
             self.control_rect.centery - checkbox_size // 2,
             checkbox_size,
             checkbox_size
         )
 
         # Draw checkbox
-        box_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        box_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
 
         if self.is_focused:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
+            border_color = theme_manager.get_color('focused_border')
 
         pygame.draw.rect(surface, box_color, checkbox_rect)
-        pygame.draw.rect(surface, border_color, checkbox_rect, 1)
+        pygame.draw.rect(surface, border_color, checkbox_rect, layout.border_width)
 
         # Draw checkmark if true
         if self.property.value:
-            check_color = colors.get('accent', pygame.Color(100, 200, 100))
+            check_color = theme_manager.get_color('accent')
             # Draw checkmark
             points = [
                 (checkbox_rect.x + 3, checkbox_rect.centery),
@@ -586,6 +926,10 @@ class BooleanPropertyRenderer(PropertyRenderer):
                 pygame.draw.lines(surface, check_color, False, points, 2)
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.control_rect.collidepoint(relative_pos):
                 if not self.property.is_readonly():
@@ -602,34 +946,37 @@ class BooleanPropertyRenderer(PropertyRenderer):
 
 
 class DropdownPropertyRenderer(PropertyRenderer):
-    """Renderer for dropdown/enum properties"""
+    """Renderer for dropdown/enum properties with improved configuration"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         super().__init__(property_schema, config)
         self.dropdown_open = False
         self.hovered_option = -1
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        layout = self.config.layout
+
         # Draw dropdown box
-        box_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        box_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
 
         if self.is_focused or self.dropdown_open:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
+            border_color = theme_manager.get_color('focused_border')
 
         pygame.draw.rect(surface, box_color, self.control_rect)
-        pygame.draw.rect(surface, border_color, self.control_rect, 1)
+        pygame.draw.rect(surface, border_color, self.control_rect, layout.border_width)
 
         # Draw current value
         current_text = str(self.property.value or "")
         if self.property.options and self.property.value in self.property.options:
             current_text = self.property.value
 
-        text_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('control_text')
         if self.property.is_readonly():
-            text_color = colors.get('readonly_text', pygame.Color(150, 150, 150))
+            text_color = theme_manager.get_color('readonly_text')
 
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(current_text, text_color)
             else:
@@ -637,14 +984,14 @@ class DropdownPropertyRenderer(PropertyRenderer):
 
             text_rect = text_surface.get_rect()
             text_rect.centery = self.control_rect.centery
-            text_rect.x = self.control_rect.x + 4
+            text_rect.x = self.control_rect.x + layout.control_padding
 
             surface.blit(text_surface, text_rect)
         except Exception:
             pass
 
         # Draw dropdown arrow
-        arrow_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        arrow_color = theme_manager.get_color('control_text')
         arrow_center_x = self.control_rect.right - 12
         arrow_center_y = self.control_rect.centery
 
@@ -666,6 +1013,10 @@ class DropdownPropertyRenderer(PropertyRenderer):
         pygame.draw.polygon(surface, arrow_color, points)
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.control_rect.collidepoint(relative_pos):
                 if not self.property.is_readonly():
@@ -673,17 +1024,17 @@ class DropdownPropertyRenderer(PropertyRenderer):
                 return True
             elif self.dropdown_open:
                 # Check if clicking on dropdown options
-                list_height = len(self.property.options or []) * self.config.row_height
+                list_height = len(self.property.options or []) * self.config.layout.property_row_height
                 list_rect = pygame.Rect(
                     self.control_rect.x,
                     self.control_rect.bottom,
                     self.control_rect.width,
-                    min(list_height, 200)
+                    min(list_height, self.config.layout.dropdown_max_height)
                 )
 
                 if list_rect.collidepoint(relative_pos):
                     # Calculate which option was clicked
-                    option_index = (relative_pos[1] - list_rect.y) // self.config.row_height
+                    option_index = (relative_pos[1] - list_rect.y) // self.config.layout.property_row_height
                     if 0 <= option_index < len(self.property.options):
                         selected_option = self.property.options[option_index]
                         if self.property.option_values:
@@ -698,16 +1049,16 @@ class DropdownPropertyRenderer(PropertyRenderer):
 
         elif event.type == pygame.MOUSEMOTION and self.dropdown_open:
             # Update hovered option
-            list_height = len(self.property.options or []) * self.config.row_height
+            list_height = len(self.property.options or []) * self.config.layout.property_row_height
             list_rect = pygame.Rect(
                 self.control_rect.x,
                 self.control_rect.bottom,
                 self.control_rect.width,
-                min(list_height, 200)
+                min(list_height, self.config.layout.dropdown_max_height)
             )
 
             if list_rect.collidepoint(relative_pos):
-                self.hovered_option = (relative_pos[1] - list_rect.y) // self.config.row_height
+                self.hovered_option = (relative_pos[1] - list_rect.y) // self.config.layout.property_row_height
             else:
                 self.hovered_option = -1
 
@@ -724,7 +1075,7 @@ class DropdownPropertyRenderer(PropertyRenderer):
 
 
 class ColorPropertyRenderer(PropertyRenderer):
-    """Improved renderer for color properties"""
+    """Improved renderer for color properties with configuration support"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         super().__init__(property_schema, config)
@@ -738,6 +1089,7 @@ class ColorPropertyRenderer(PropertyRenderer):
         self.hue_surface = None
         self.sv_surface = None
         self.picker_rect = None
+        self._sv_cache = {}
 
     def _get_color(self) -> pygame.Color:
         """Get the current color as pygame.Color"""
@@ -760,7 +1112,6 @@ class ColorPropertyRenderer(PropertyRenderer):
 
     def _color_to_hsv(self, color: pygame.Color):
         """Convert color to HSV using pygame's built-in conversion"""
-        # Use pygame's built-in HSV conversion which is faster
         h, s, v, a = color.hsva
         self.hsv = [h, s / 100.0, v / 100.0]  # Normalize S,V to 0-1
         self.alpha = a * 255 // 100  # Convert percentage to 0-255
@@ -791,17 +1142,13 @@ class ColorPropertyRenderer(PropertyRenderer):
         """Create saturation/value surface efficiently with caching"""
         cache_key = (width, height, int(hue))
 
-        # Simple cache to avoid recreating identical surfaces
-        if not hasattr(self, '_sv_cache'):
-            self._sv_cache = {}
-
         if cache_key in self._sv_cache:
             return self._sv_cache[cache_key]
 
         surface = pygame.Surface((width, height))
 
-        # Use larger chunks for better performance
-        chunk_size = max(2, min(8, width // 20))  # Adaptive chunk size
+        # Use configurable chunk size for performance
+        chunk_size = self.config.interaction.color_picker_sv_chunk_size
 
         for x in range(0, width, chunk_size):
             for y in range(0, height, chunk_size):
@@ -817,8 +1164,8 @@ class ColorPropertyRenderer(PropertyRenderer):
                 rect = pygame.Rect(x, y, chunk_width, chunk_height)
                 pygame.draw.rect(surface, color, rect)
 
-        # Cache the surface (limit cache size)
-        if len(self._sv_cache) > 10:  # Simple cache size limit
+        # Cache the surface with configurable limit
+        if len(self._sv_cache) > self.config.interaction.color_picker_cache_limit:
             # Remove oldest entry
             oldest_key = next(iter(self._sv_cache))
             del self._sv_cache[oldest_key]
@@ -827,9 +1174,9 @@ class ColorPropertyRenderer(PropertyRenderer):
         return surface
 
     def _get_picker_position(self) -> pygame.Rect:
-        """Calculate color picker position, handling screen boundaries"""
-        picker_width = 220
-        picker_height = 200
+        """Calculate color picker position using configuration"""
+        picker_width = self.config.layout.color_picker_width
+        picker_height = self.config.layout.color_picker_height
 
         # Default position below the control
         x = self.control_rect.x
@@ -847,13 +1194,14 @@ class ColorPropertyRenderer(PropertyRenderer):
 
         return pygame.Rect(x, y, picker_width, picker_height)
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        layout = self.config.layout
         current_color = self._get_color()
 
         # Draw color swatch
-        swatch_size = self.control_rect.height - 4
+        swatch_size = min(layout.color_picker_size, self.control_rect.height - 4)
         swatch_rect = pygame.Rect(
-            self.control_rect.x + 2,
+            self.control_rect.x + layout.control_padding,
             self.control_rect.y + 2,
             swatch_size,
             swatch_size
@@ -866,19 +1214,20 @@ class ColorPropertyRenderer(PropertyRenderer):
         pygame.draw.rect(surface, current_color, swatch_rect)
 
         # Draw border
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        border_color = theme_manager.get_color('control_border')
         if self.is_focused:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
-        pygame.draw.rect(surface, border_color, swatch_rect, 1)
+            border_color = theme_manager.get_color('focused_border')
+        pygame.draw.rect(surface, border_color, swatch_rect, layout.border_width)
 
         # Draw color text
-        text_x = swatch_rect.right + 4
+        text_x = swatch_rect.right + layout.control_padding
         color_text = f"#{current_color.r:02x}{current_color.g:02x}{current_color.b:02x}"
         if current_color.a < 255:
             color_text += f"{current_color.a:02x}"
 
-        text_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('control_text')
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(color_text, text_color)
             else:
@@ -891,7 +1240,6 @@ class ColorPropertyRenderer(PropertyRenderer):
             # Clip text if it would overflow
             available_width = self.control_rect.right - text_x
             if text_surface.get_width() > available_width:
-                # Create a subsurface to clip the text
                 clipped_width = max(0, available_width)
                 if clipped_width > 0:
                     clipped_surface = text_surface.subsurface((0, 0, clipped_width, text_surface.get_height()))
@@ -903,15 +1251,16 @@ class ColorPropertyRenderer(PropertyRenderer):
 
         # Draw color picker if open
         if self.color_picker_open:
-            self._draw_color_picker(surface, colors)
+            self.draw_color_picker(surface, theme_manager)
 
-    def _draw_transparency_background(self, surface: pygame.Surface, rect: pygame.Rect):
+    @staticmethod
+    def _draw_transparency_background(surface: pygame.Surface, rect: pygame.Rect):
         """Draw checkerboard pattern for transparency visualization"""
         checker_size = 4
         for x in range(0, rect.width, checker_size):
             for y in range(0, rect.height, checker_size):
                 checker_color = pygame.Color(200, 200, 200) if (
-                                                                           x // checker_size + y // checker_size) % 2 == 0 else pygame.Color(
+                                                                       x // checker_size + y // checker_size) % 2 == 0 else pygame.Color(
                     150, 150, 150)
                 checker_rect = pygame.Rect(
                     rect.x + x,
@@ -921,15 +1270,16 @@ class ColorPropertyRenderer(PropertyRenderer):
                 )
                 pygame.draw.rect(surface, checker_color, checker_rect)
 
-    def _draw_color_picker(self, surface: pygame.Surface, colors: Dict[str, pygame.Color]):
-        """Draw the color picker popup with improved positioning"""
+    def draw_color_picker(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        """Draw the color picker popup with configuration support"""
         self.picker_rect = self._get_picker_position()
 
         # Background
-        bg_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        bg_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
         pygame.draw.rect(surface, bg_color, self.picker_rect)
-        pygame.draw.rect(surface, border_color, self.picker_rect, 1)
+        pygame.draw.rect(surface, border_color, self.picker_rect,
+                         self.config.layout.border_width)
 
         # Color square (saturation/value)
         sv_rect = pygame.Rect(self.picker_rect.x + 10, self.picker_rect.y + 10, 160, 160)
@@ -955,8 +1305,12 @@ class ColorPropertyRenderer(PropertyRenderer):
                          (hue_rect.x - 2, cursor_y), (hue_rect.right + 2, cursor_y), 1)
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # CHANGE: Make entire control area clickable, not just the swatch
+            # Make entire control area clickable
             if self.control_rect.collidepoint(relative_pos):
                 if not self.property.is_readonly():
                     self.color_picker_open = not self.color_picker_open
@@ -971,8 +1325,8 @@ class ColorPropertyRenderer(PropertyRenderer):
                     if sv_rect.collidepoint(relative_pos):
                         rel_x = (relative_pos[0] - sv_rect.x) / sv_rect.width
                         rel_y = (relative_pos[1] - sv_rect.y) / sv_rect.height
-                        self.hsv[1] = max(0, min(1, rel_x))
-                        self.hsv[2] = max(0, min(1, 1 - rel_y))
+                        self.hsv[1] = max(0, min(1, int(rel_x)))
+                        self.hsv[2] = max(0, min(1, 1 - int(rel_y)))
                         self.set_value(self._hsv_to_color())
                         self.dragging_sv = True
                         return True
@@ -981,7 +1335,7 @@ class ColorPropertyRenderer(PropertyRenderer):
                     hue_rect = pygame.Rect(sv_rect.right + 10, sv_rect.y, 20, sv_rect.height)
                     if hue_rect.collidepoint(relative_pos):
                         rel_y = (relative_pos[1] - hue_rect.y) / hue_rect.height
-                        self.hsv[0] = max(0, min(360, rel_y * 360))
+                        self.hsv[0] = max(0, min(360, int(rel_y * 360)))
                         self.set_value(self._hsv_to_color())
                         self.dragging_hue = True
                         return True
@@ -998,15 +1352,15 @@ class ColorPropertyRenderer(PropertyRenderer):
                     sv_rect = pygame.Rect(self.picker_rect.x + 10, self.picker_rect.y + 10, 160, 160)
                     rel_x = (relative_pos[0] - sv_rect.x) / sv_rect.width
                     rel_y = (relative_pos[1] - sv_rect.y) / sv_rect.height
-                    self.hsv[1] = max(0, min(1, rel_x))
-                    self.hsv[2] = max(0, min(1, 1 - rel_y))
+                    self.hsv[1] = max(0, min(1, int(rel_x)))
+                    self.hsv[2] = max(0, min(1, 1 - int(rel_y)))
                     self.set_value(self._hsv_to_color())
                     return True
                 elif self.dragging_hue:
                     sv_rect = pygame.Rect(self.picker_rect.x + 10, self.picker_rect.y + 10, 160, 160)
                     hue_rect = pygame.Rect(sv_rect.right + 10, sv_rect.y, 20, sv_rect.height)
                     rel_y = (relative_pos[1] - hue_rect.y) / hue_rect.height
-                    self.hsv[0] = max(0, min(360, rel_y * 360))
+                    self.hsv[0] = max(0, min(360, int(rel_y * 360)))
                     self.set_value(self._hsv_to_color())
                     return True
 
@@ -1014,7 +1368,7 @@ class ColorPropertyRenderer(PropertyRenderer):
 
 
 class VectorPropertyRenderer(PropertyRenderer):
-    """Renderer for vector2/vector3 properties - Simple text version"""
+    """Renderer for vector2/vector3 properties with configuration support"""
 
     def __init__(self, property_schema: PropertySchema, config: PropertyConfig):
         super().__init__(property_schema, config)
@@ -1022,10 +1376,8 @@ class VectorPropertyRenderer(PropertyRenderer):
         self.editing_component = -1
         self.text_input = ""
         self.cursor_pos = 0
-        self.blink_timer = 0
-        self.show_cursor = True
 
-        # Ensure the property value is properly formatted as floats from the start
+        # Ensure the property value is properly formatted as floats
         if self.property.value:
             vector_value = self._get_vector_value()
             self.property.value = vector_value
@@ -1044,10 +1396,8 @@ class VectorPropertyRenderer(PropertyRenderer):
 
     def _format_vector_text(self, vector_value: List[float]) -> str:
         """Format vector as readable text"""
-        if self.component_count == 2:
-            return f"[{vector_value[0]:.{self.property.precision}f}, {vector_value[1]:.{self.property.precision}f}]"
-        else:
-            return f"[{vector_value[0]:.{self.property.precision}f}, {vector_value[1]:.{self.property.precision}f}, {vector_value[2]:.{self.property.precision}f}]"
+        formatted_values = [f"{v:.{self.property.precision}f}" for v in vector_value]
+        return f"[{', '.join(formatted_values)}]"
 
     def _parse_vector_text(self, text: str) -> List[float]:
         """Parse text back to vector"""
@@ -1074,17 +1424,19 @@ class VectorPropertyRenderer(PropertyRenderer):
             self.set_value(vector_value)
         super().stop_editing(save)
 
-    def _draw_control(self, surface: pygame.Surface, font: Any, colors: Dict[str, pygame.Color]):
-        """Draw the vector control - exactly like TextPropertyRenderer"""
+    def _draw_control(self, surface: pygame.Surface, theme_manager: PropertyThemeManager):
+        """Draw the vector control similar to text renderer"""
+        layout = self.config.layout
+
         # Draw text input box
-        box_color = colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = colors.get('control_border', pygame.Color(100, 100, 100))
+        box_color = theme_manager.get_color('control_bg')
+        border_color = theme_manager.get_color('control_border')
 
         if self.is_editing:
-            border_color = colors.get('focused_border', pygame.Color(120, 160, 255))
+            border_color = theme_manager.get_color('focused_border')
 
         pygame.draw.rect(surface, box_color, self.control_rect)
-        pygame.draw.rect(surface, border_color, self.control_rect, 1)
+        pygame.draw.rect(surface, border_color, self.control_rect, layout.border_width)
 
         # Draw text
         if self.is_editing:
@@ -1093,43 +1445,48 @@ class VectorPropertyRenderer(PropertyRenderer):
             vector_value = self._get_vector_value()
             display_text = self._format_vector_text(vector_value)
 
-        text_color = colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = theme_manager.get_color('control_text')
         if self.property.is_readonly():
-            text_color = colors.get('readonly_text', pygame.Color(150, 150, 150))
+            text_color = theme_manager.get_color('readonly_text')
 
         try:
+            font = theme_manager.get_font()
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(display_text, text_color)
             else:
                 text_surface = font.render(display_text, True, text_color)
 
-            # Position text exactly like TextPropertyRenderer
+            # Position text
             text_rect = text_surface.get_rect()
             text_rect.centery = self.control_rect.centery
-            text_rect.x = self.control_rect.x + 4
+            text_rect.x = self.control_rect.x + layout.control_padding
 
-            # Create clipping rect exactly like TextPropertyRenderer
+            # Create clipping rect
             clip_rect = self.control_rect.copy()
-            clip_rect.width -= 8  # Padding
+            clip_rect.width -= layout.control_padding * 2
 
             surface.set_clip(clip_rect)
             surface.blit(text_surface, text_rect)
             surface.set_clip(None)
 
-            # Draw cursor when editing - exactly like TextPropertyRenderer
+            # Draw cursor when editing
             if self.is_editing and self.show_cursor:
                 cursor_x = text_rect.x + font.size(display_text[:self.cursor_pos])[0]
                 if self.control_rect.contains(cursor_x, self.control_rect.y, 1, self.control_rect.height):
                     pygame.draw.line(surface, text_color,
-                                   (cursor_x, self.control_rect.y + 4),
-                                   (cursor_x, self.control_rect.bottom - 4))
+                                     (cursor_x, self.control_rect.y + layout.text_cursor_padding),
+                                     (cursor_x, self.control_rect.bottom - layout.text_cursor_padding))
 
         except Exception as e:
             if PROPERTY_DEBUG:
                 print(f"Error rendering vector control: {e}")
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
-        """Handle events - exactly like TextPropertyRenderer"""
+
+        if self._check_reset_button_click(event, relative_pos):
+            return True
+
+        """Handle events similar to text renderer"""
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.control_rect.collidepoint(relative_pos):
                 if not self.is_editing:
@@ -1141,11 +1498,13 @@ class VectorPropertyRenderer(PropertyRenderer):
 
         elif event.type == pygame.KEYDOWN and self.is_editing:
             if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
-                self.stop_editing(True)
-                return True
+                if self.config.behavior.enter_confirms_edit:
+                    self.stop_editing(True)
+                    return True
             elif event.key == pygame.K_ESCAPE:
-                self.stop_editing(False)
-                return True
+                if self.config.behavior.escape_cancels_edit:
+                    self.stop_editing(False)
+                    return True
             elif event.key == pygame.K_BACKSPACE:
                 if self.cursor_pos > 0:
                     self.text_input = self.text_input[:self.cursor_pos - 1] + self.text_input[self.cursor_pos:]
@@ -1179,7 +1538,7 @@ class VectorPropertyRenderer(PropertyRenderer):
 
 
 class PropertyPanel(UIElement):
-    """Main property inspector panel widget"""
+    """Main property inspector panel widget with comprehensive configuration"""
 
     def __init__(self, relative_rect: pygame.Rect,
                  manager: pygame_gui.UIManager,
@@ -1202,6 +1561,12 @@ class PropertyPanel(UIElement):
 
         self.config = config or PropertyConfig()
 
+        # Create theme manager
+        element_ids = ['property_inspector']
+        if hasattr(self, 'object_ids') and self.object_ids:
+            element_ids.extend(self.object_ids)
+        self.theme_manager = PropertyThemeManager(manager, element_ids)
+
         # Property data
         self.properties: Dict[str, PropertySchema] = {}
         self.sections: Dict[str, PropertySection] = {}
@@ -1216,34 +1581,35 @@ class PropertyPanel(UIElement):
         self.focused_property: Optional[str] = None
         self.is_panel_focused = False
 
-        # Scrolling
+        # Scrolling with improved configuration
         self.scroll_y = 0
         self.max_scroll = 0
         self.content_height = 0
 
-        # Theme data
-        self._update_theme_data()
+        # Layout state
+        self._last_rebuild_state = None
 
         # Create the image surface
         self.image = pygame.Surface(self.rect.size).convert()
 
         # Initialize
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _needs_rebuild(self) -> bool:
-        """Check if UI actually needs rebuilding"""
-        if not hasattr(self, '_last_rebuild_state'):
-            self._last_rebuild_state = None
-            return True
-
-        # Create current state signature
+        """Check if UI actually needs rebuilding - FIXED: Better config detection"""
         current_state = {
             'scroll_y': self.scroll_y,
             'rect_size': (self.rect.width, self.rect.height),
             'section_states': {s.id: s.expanded for s in self.sections.values()},
             'focused_property': self.focused_property,
-            'property_count': len(self.properties)
+            'property_count': len(self.properties),
+            'show_advanced': self.config.behavior.show_advanced_properties,
+            # CHANGE: Better config hash that includes all layout values
+            'row_height': self.config.layout.property_row_height,
+            'section_height': self.config.layout.section_header_height,
+            'label_width': self.config.layout.min_label_width,
+            'control_padding': self.config.layout.control_padding,
         }
 
         if current_state != self._last_rebuild_state:
@@ -1252,155 +1618,16 @@ class PropertyPanel(UIElement):
 
         return False
 
-    def _update_theme_data(self):
-        """Update theme-dependent data"""
-        try:
-            self.themed_colors = {}
-
-            color_mappings = {
-                'dark_bg': pygame.Color(45, 45, 45),
-                'normal_text': pygame.Color(255, 255, 255),
-                'secondary_text': pygame.Color(180, 180, 180),
-                'readonly_text': pygame.Color(150, 150, 150),
-                'section_bg': pygame.Color(35, 35, 35),
-                'section_text': pygame.Color(200, 200, 200),
-                'control_bg': pygame.Color(60, 60, 60),
-                'control_text': pygame.Color(255, 255, 255),
-                'control_border': pygame.Color(100, 100, 100),
-                'focused_bg': pygame.Color(50, 80, 120),
-                'focused_border': pygame.Color(120, 160, 255),
-                'hovered_bg': pygame.Color(50, 50, 50),
-                'selected_bg': pygame.Color(70, 130, 180),
-                'error_bg': pygame.Color(60, 20, 20),
-                'error_text': pygame.Color(255, 100, 100),
-                'accent': pygame.Color(100, 200, 100),
-                'normal_border': pygame.Color(80, 80, 80),
-            }
-
-            theme = self.ui_manager.get_theme()
-
-            for color_id, default_color in color_mappings.items():
-                try:
-                    if hasattr(theme, 'get_colour_or_gradient'):
-                        color = theme.get_colour_or_gradient(color_id, ['property_inspector'])
-                        self.themed_colors[color_id] = color if color else default_color
-                    else:
-                        self.themed_colors[color_id] = default_color
-                except Exception:
-                    self.themed_colors[color_id] = default_color
-
-            # Get themed font
-            try:
-                if hasattr(theme, 'get_font'):
-                    self.themed_font = theme.get_font(['property_inspector'])
-                else:
-                    raise Exception("No font method")
-            except Exception:
-                try:
-                    self.themed_font = pygame.font.SysFont('Arial', 12)
-                except:
-                    self.themed_font = pygame.font.Font(None, 12)
-
-        except Exception as e:
-            if PROPERTY_DEBUG:
-                print(f"Error getting theme data: {e}")
-            # Complete fallback
-            self.themed_colors = {
-                'dark_bg': pygame.Color(45, 45, 45),
-                'normal_text': pygame.Color(255, 255, 255),
-                'secondary_text': pygame.Color(180, 180, 180),
-                'readonly_text': pygame.Color(150, 150, 150),
-                'section_bg': pygame.Color(35, 35, 35),
-                'section_text': pygame.Color(200, 200, 200),
-                'control_bg': pygame.Color(60, 60, 60),
-                'control_text': pygame.Color(255, 255, 255),
-                'control_border': pygame.Color(100, 100, 100),
-                'focused_bg': pygame.Color(50, 80, 120),
-                'focused_border': pygame.Color(120, 160, 255),
-                'hovered_bg': pygame.Color(50, 50, 50),
-                'selected_bg': pygame.Color(70, 130, 180),
-                'error_bg': pygame.Color(60, 20, 20),
-                'error_text': pygame.Color(255, 100, 100),
-                'accent': pygame.Color(100, 200, 100),
-                'normal_border': pygame.Color(80, 80, 80),
-            }
-            try:
-                self.themed_font = pygame.font.SysFont('Arial', 12)
-            except:
-                self.themed_font = pygame.font.Font(None, 12)
-
     def rebuild_from_changed_theme_data(self):
         """Called when theme data changes"""
-        self._update_theme_data()
+        self.theme_manager.rebuild_from_changed_theme_data()
         self.rebuild_ui()
-        self._rebuild_image()
-
-    def set_properties(self, properties: List[PropertySchema], target_object: Any = None):
-        """Set the properties to display"""
-        self.target_object = target_object
-        self.properties.clear()
-        self.sections.clear()
-        self.renderers.clear()
-
-        # Store the original, unfiltered properties list
-        self._original_properties = properties.copy()
-
-        # Organize properties by section
-        for prop in properties:
-            if prop.is_hidden():
-                continue
-            if prop.is_advanced() and not self.config.show_advanced_properties:
-                continue
-
-            self.properties[prop.id] = prop
-
-            section_name = prop.section or "General"
-            if section_name not in self.sections:
-                self.sections[section_name] = PropertySection(
-                    section_name, section_name, True,
-                    order=len(self.sections)
-                )
-
-            self.sections[section_name].properties.append(prop)
-
-        # Sort sections and properties
-        for section in self.sections.values():
-            section.properties.sort(key=lambda p: p.order)
-
-        # Create renderers
-        self._create_renderers()
-
-        # Rebuild UI
-        self.rebuild_ui()
-        self._rebuild_image()
-
-    def _create_renderers(self):
-        """Create property renderers based on property types"""
-        self.renderers.clear()
-
-        for prop in self.properties.values():
-            if prop.property_type == PropertyType.TEXT or prop.property_type == PropertyType.MULTILINE_TEXT:
-                renderer = TextPropertyRenderer(prop, self.config)
-            elif prop.property_type == PropertyType.NUMBER or prop.property_type == PropertyType.SLIDER:
-                renderer = NumberPropertyRenderer(prop, self.config)
-            elif prop.property_type == PropertyType.BOOLEAN:
-                renderer = BooleanPropertyRenderer(prop, self.config)
-            elif prop.property_type == PropertyType.DROPDOWN:
-                renderer = DropdownPropertyRenderer(prop, self.config)
-            elif prop.property_type == PropertyType.COLOR:
-                renderer = ColorPropertyRenderer(prop, self.config)
-            elif prop.property_type == PropertyType.VECTOR2 or prop.property_type == PropertyType.VECTOR3:
-                renderer = VectorPropertyRenderer(prop, self.config)
-            else:
-                # Default to text renderer
-                renderer = TextPropertyRenderer(prop, self.config)
-
-            self.renderers[prop.id] = renderer
+        self.rebuild_image()
 
     def rebuild_ui(self):
-        """Rebuild the UI layout"""
+        """Rebuild the UI layout with improved configuration support"""
         if not self._needs_rebuild():
-            return  # Skip rebuild if nothing changed
+            return
 
         if PROPERTY_DEBUG:
             print("Rebuilding property inspector UI...")
@@ -1409,8 +1636,8 @@ class PropertyPanel(UIElement):
         self.section_rects.clear()
 
         current_y = 0
-        label_width = max(self.config.min_label_width,
-                          int(self.rect.width * self.config.label_width_ratio))
+        label_width = max(self.config.layout.min_label_width,
+                          int(self.rect.width * self.config.layout.label_width_ratio))
 
         # Sort sections by order
         sorted_sections = sorted(self.sections.values(), key=lambda s: s.order)
@@ -1422,30 +1649,27 @@ class PropertyPanel(UIElement):
             # Section header
             section_rect = pygame.Rect(
                 0, current_y - self.scroll_y,
-                self.rect.width, self.config.section_header_height
+                self.rect.width, self.config.layout.section_header_height
             )
             self.section_rects[section.id] = section_rect
-            current_y += self.config.section_header_height
+            current_y += self.config.layout.section_header_height
 
             # Section properties (if expanded)
             if section.expanded:
                 for prop in section.properties:
-                    # Store absolute Y position for layout
                     absolute_y = current_y - self.scroll_y
                     prop_rect = pygame.Rect(
                         0, absolute_y,
-                        self.rect.width, self.config.row_height
+                        self.rect.width, self.config.layout.property_row_height
                     )
 
                     if prop.id in self.renderers:
                         renderer = self.renderers[prop.id]
                         renderer.set_geometry(prop_rect, label_width)
-
-                        # Update focus state
                         renderer.is_focused = (prop.id == self.focused_property)
 
                     self.visible_properties.append(prop.id)
-                    current_y += self.config.row_height
+                    current_y += self.config.layout.property_row_height
 
         # Update content height and max scroll
         self.content_height = current_y
@@ -1455,137 +1679,130 @@ class PropertyPanel(UIElement):
             print(f"UI rebuilt: {len(self.visible_properties)} visible properties, "
                   f"content_height: {self.content_height}, max_scroll: {self.max_scroll}")
 
-    def _rebuild_image(self):
-        """Rebuild the image surface"""
+    def rebuild_image(self):
+        """Rebuild the image surface with improved theme support"""
         # Fill background
-        bg_color = self.themed_colors.get('dark_bg', pygame.Color(45, 45, 45))
+        bg_color = self.theme_manager.get_color('dark_bg')
         if hasattr(bg_color, 'apply_gradient_to_surface'):
             bg_color.apply_gradient_to_surface(self.image)
         else:
             self.image.fill(bg_color)
 
-        # Draw sections and properties
+        # Draw sections and properties with improved rendering
         for section_id, section in self.sections.items():
             if section_id in self.section_rects:
                 section_rect = self.section_rects[section_id]
                 if 0 <= section_rect.y < self.rect.height and section_rect.bottom > 0:
                     self._draw_section_header(section, section_rect)
 
-        # Draw properties
-        open_dropdowns = []  # Track dropdown renderers for later drawing
-        open_color_pickers = []  # Track color pickers
+        # Draw properties with improved clipping and rendering
+        open_dropdowns = []
+        open_color_pickers = []
 
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
-                # Check if property is visible
-                # if (renderer.rect.y >= -self.config.row_height and renderer.rect.y < self.rect.height):
-                if -self.config.row_height <= renderer.rect.y < self.rect.height:
+                if -self.config.layout.property_row_height <= renderer.rect.y < self.rect.height:
 
-                    # Calculate surface rect (clamped to image bounds)
-                    surface_y = max(0, renderer.rect.y)
-                    surface_height = min(self.config.row_height,
-                                         self.rect.height - surface_y)
+                    # Special handling for dropdown and color picker renderers
+                    if isinstance(renderer, DropdownPropertyRenderer):
+                        self._draw_property_without_dropdown(renderer)
+                        if renderer.dropdown_open:
+                            open_dropdowns.append(renderer)
+                    elif isinstance(renderer, ColorPropertyRenderer):
+                        self._draw_property_without_color_picker(renderer)
+                        if renderer.color_picker_open:
+                            open_color_pickers.append(renderer)
+                    else:
+                        self._draw_property_clipped(renderer)
 
-                    if surface_height > 0:
-                        try:
-                            # Create subsurface at the correct position
-                            surface_rect = pygame.Rect(0, surface_y, self.rect.width, surface_height)
-                            prop_surface = self.image.subsurface(surface_rect)
+        # Draw open dropdowns on top
+        for renderer in open_dropdowns:
+            self._draw_dropdown_list(renderer)
 
-                            # Adjust renderer drawing if partially clipped
-                            draw_offset_y = surface_y - renderer.rect.y
+        # Draw open color pickers on top
+        for renderer in open_color_pickers:
+            self._draw_color_picker_popup(renderer)
 
-                            # Create a temporary rect for drawing
-                            draw_rect = pygame.Rect(0, draw_offset_y, self.rect.width, self.config.row_height)
-
-                            # Temporarily adjust renderer geometry for drawing
-                            old_rect = renderer.rect
-                            old_label_rect = renderer.label_rect
-                            old_control_rect = renderer.control_rect
-
-                            renderer.rect = draw_rect
-                            renderer.label_rect = pygame.Rect(
-                                draw_rect.x, draw_rect.y,
-                                old_label_rect.width, draw_rect.height
-                            )
-                            renderer.control_rect = pygame.Rect(
-                                draw_rect.x + old_label_rect.width + self.config.control_spacing,
-                                draw_rect.y,
-                                old_control_rect.width, draw_rect.height
-                            )
-
-                            # Special handling for dropdown renderers
-                            if isinstance(renderer, DropdownPropertyRenderer):
-                                # Draw property without dropdown list on subsurface
-                                self._draw_property_without_dropdown(renderer, prop_surface)
-                                # Store for later drawing on main surface
-                                if renderer.dropdown_open:
-                                    open_dropdowns.append((renderer, old_rect, old_label_rect, old_control_rect))
-                            # Special handling for color picker renderers
-                            elif isinstance(renderer, ColorPropertyRenderer):
-                                # Draw property without color picker on subsurface
-                                self._draw_property_without_color_picker(renderer, prop_surface)
-                                # Store for later drawing on main surface
-                                if renderer.color_picker_open:
-                                    open_color_pickers.append((renderer, old_rect, old_label_rect, old_control_rect))
-                            else:
-                                # Draw the property normally
-                                renderer.draw(prop_surface, self.themed_font, self.themed_colors)
-
-                            # Restore original geometry
-                            renderer.rect = old_rect
-                            renderer.label_rect = old_label_rect
-                            renderer.control_rect = old_control_rect
-
-                        except (ValueError, pygame.error) as e:
-                            if PROPERTY_DEBUG:
-                                print(f"Error creating subsurface for {prop_id}: {e}")
-
-        # Draw open dropdown lists on the main surface (after all properties)
-        for renderer, orig_rect, orig_label_rect, orig_control_rect in open_dropdowns:
-            if renderer.dropdown_open and renderer.property.options:
-                self._draw_dropdown_list(renderer, orig_rect, orig_label_rect, orig_control_rect)
-
-        # Draw open color pickers on the main surface (after all properties)
-        for renderer, orig_rect, orig_label_rect, orig_control_rect in open_color_pickers:
-            if renderer.color_picker_open:
-                self._draw_color_picker_popup(renderer, orig_rect, orig_label_rect, orig_control_rect)
-
-        # Draw border
-        border_color = self.themed_colors.get('normal_border', pygame.Color(80, 80, 80))
-        pygame.draw.rect(self.image, border_color, self.image.get_rect(), 1)
+        # Draw border with configurable width
+        border_color = self.theme_manager.get_color('normal_border')
+        pygame.draw.rect(self.image, border_color, self.image.get_rect(),
+                         self.config.layout.border_width)
 
         # Draw focus indicator if panel is focused
         if self.is_panel_focused:
-            focus_color = self.themed_colors.get('focused_border', pygame.Color(120, 160, 255))
-            pygame.draw.rect(self.image, focus_color, self.image.get_rect(), 2)
+            focus_color = self.theme_manager.get_color('focused_border')
+            pygame.draw.rect(self.image, focus_color, self.image.get_rect(),
+                             self.config.layout.focus_border_width)
 
-    def _draw_property_without_dropdown(self, renderer: DropdownPropertyRenderer, surface: pygame.Surface):
+    def _draw_property_clipped(self, renderer: PropertyRenderer):
+        """Draw a property with proper clipping"""
+        surface_y = max(0, renderer.rect.y)
+        surface_height = min(self.config.layout.property_row_height,
+                             self.rect.height - surface_y)
+
+        if surface_height > 0:
+            try:
+                surface_rect = pygame.Rect(0, surface_y, self.rect.width, surface_height)
+                prop_surface = self.image.subsurface(surface_rect)
+
+                # Adjust renderer drawing if partially clipped
+                draw_offset_y = surface_y - renderer.rect.y
+
+                # Temporarily adjust renderer geometry for drawing
+                old_rect = renderer.rect
+                old_label_rect = renderer.label_rect
+                old_control_rect = renderer.control_rect
+
+                renderer.rect = pygame.Rect(0, draw_offset_y, self.rect.width,
+                                            self.config.layout.property_row_height)
+                renderer.label_rect = pygame.Rect(
+                    renderer.rect.x, renderer.rect.y,
+                    old_label_rect.width, renderer.rect.height
+                )
+                renderer.control_rect = pygame.Rect(
+                    renderer.rect.x + old_label_rect.width + self.config.layout.control_spacing,
+                    renderer.rect.y,
+                    old_control_rect.width, renderer.rect.height
+                )
+
+                # Draw the property
+                renderer.draw(prop_surface, self.theme_manager)
+
+                # Restore original geometry
+                renderer.rect = old_rect
+                renderer.label_rect = old_label_rect
+                renderer.control_rect = old_control_rect
+
+            except (ValueError, pygame.error) as e:
+                if PROPERTY_DEBUG:
+                    print(f"Error creating subsurface for {renderer.property.id}: {e}")
+
+    def _draw_property_without_dropdown(self, renderer: DropdownPropertyRenderer):
         """Draw dropdown property without the dropdown list"""
-        # Temporarily disable dropdown for drawing
         dropdown_open = renderer.dropdown_open
         renderer.dropdown_open = False
-
-        # Draw the property
-        renderer.draw(surface, self.themed_font, self.themed_colors)
-
-        # Restore dropdown state
+        self._draw_property_clipped(renderer)
         renderer.dropdown_open = dropdown_open
 
-    def _draw_dropdown_list(self, renderer: DropdownPropertyRenderer, orig_rect: pygame.Rect,
-                            orig_label_rect: pygame.Rect, orig_control_rect: pygame.Rect):
+    def _draw_property_without_color_picker(self, renderer: ColorPropertyRenderer):
+        """Draw color property without the color picker"""
+        color_picker_open = renderer.color_picker_open
+        renderer.color_picker_open = False
+        self._draw_property_clipped(renderer)
+        renderer.color_picker_open = color_picker_open
+
+    def _draw_dropdown_list(self, renderer: DropdownPropertyRenderer):
         """Draw dropdown list on the main surface"""
         if not renderer.property.options:
             return
 
-        # Calculate dropdown list position using original control rect
-        list_height = len(renderer.property.options) * self.config.row_height
+        list_height = len(renderer.property.options) * self.config.layout.property_row_height
         list_rect = pygame.Rect(
-            orig_control_rect.x,
-            orig_control_rect.bottom,
-            orig_control_rect.width,
-            min(list_height, 200)  # Max height
+            renderer.control_rect.x,
+            renderer.control_rect.bottom,
+            renderer.control_rect.width,
+            min(list_height, self.config.layout.dropdown_max_height)
         )
 
         # Clip list rect to panel bounds
@@ -1593,24 +1810,24 @@ class PropertyPanel(UIElement):
         clipped_list_rect = list_rect.clip(panel_rect)
 
         if clipped_list_rect.width <= 0 or clipped_list_rect.height <= 0:
-            return  # Nothing to draw
+            return
 
         # Background and border
-        box_color = self.themed_colors.get('control_bg', pygame.Color(60, 60, 60))
-        border_color = self.themed_colors.get('control_border', pygame.Color(100, 100, 100))
+        box_color = self.theme_manager.get_color('control_bg')
+        border_color = self.theme_manager.get_color('control_border')
 
         pygame.draw.rect(self.image, box_color, clipped_list_rect)
-        pygame.draw.rect(self.image, border_color, clipped_list_rect, 1)
+        pygame.draw.rect(self.image, border_color, clipped_list_rect, self.config.layout.border_width)
 
         # Draw options
-        text_color = self.themed_colors.get('control_text', pygame.Color(255, 255, 255))
+        text_color = self.theme_manager.get_color('control_text')
 
         for i, option in enumerate(renderer.property.options):
             option_rect = pygame.Rect(
                 list_rect.x,
-                list_rect.y + i * self.config.row_height,
+                list_rect.y + i * self.config.layout.property_row_height,
                 list_rect.width,
-                self.config.row_height
+                self.config.layout.property_row_height
             )
 
             # Clip option rect to visible area
@@ -1620,28 +1837,28 @@ class PropertyPanel(UIElement):
 
             # Draw hover background
             if i == renderer.hovered_option:
-                pygame.draw.rect(self.image, self.themed_colors.get('hovered_bg', pygame.Color(80, 80, 80)),
+                pygame.draw.rect(self.image, self.theme_manager.get_color('hovered_bg'),
                                  visible_option_rect)
 
             # Draw selection background
             if option == renderer.property.value:
-                pygame.draw.rect(self.image, self.themed_colors.get('selected_bg', pygame.Color(70, 130, 180)),
+                pygame.draw.rect(self.image, self.theme_manager.get_color('selected_bg'),
                                  visible_option_rect)
 
             # Draw option text
             try:
-                if hasattr(self.themed_font, 'render_premul'):
-                    option_surface = self.themed_font.render_premul(str(option), text_color)
+                font = self.theme_manager.get_font()
+                if hasattr(font, 'render_premul'):
+                    option_surface = font.render_premul(str(option), text_color)
                 else:
-                    option_surface = self.themed_font.render(str(option), True, text_color)
+                    option_surface = font.render(str(option), True, text_color)
 
                 option_text_rect = option_surface.get_rect()
                 option_text_rect.centery = option_rect.centery
-                option_text_rect.x = option_rect.x + 4
+                option_text_rect.x = option_rect.x + self.config.layout.control_padding
 
                 # Only draw if text is within visible area
                 if option_text_rect.colliderect(clipped_list_rect):
-                    # Clip text to visible area if needed
                     clip_rect = option_text_rect.clip(clipped_list_rect)
                     if clip_rect.width > 0 and clip_rect.height > 0:
                         self.image.blit(option_surface, option_text_rect,
@@ -1652,53 +1869,22 @@ class PropertyPanel(UIElement):
                 if PROPERTY_DEBUG:
                     print(f"Error rendering dropdown option: {e}")
 
-    def _draw_property_without_color_picker(self, renderer: ColorPropertyRenderer, surface: pygame.Surface):
-        """Draw color property without the color picker"""
-        # Temporarily disable color picker for drawing
-        color_picker_open = renderer.color_picker_open
-        renderer.color_picker_open = False
-
-        # Draw the property
-        renderer.draw(surface, self.themed_font, self.themed_colors)
-
-        # Restore color picker state
-        renderer.color_picker_open = color_picker_open
-
-    def _draw_color_picker_popup(self, renderer: ColorPropertyRenderer, orig_rect: pygame.Rect,
-                                 orig_label_rect: pygame.Rect, orig_control_rect: pygame.Rect):
+    def _draw_color_picker_popup(self, renderer: ColorPropertyRenderer):
         """Draw color picker popup on the main surface"""
-        if not renderer.color_picker_open:
-            return
-
-        # Temporarily restore original geometry
-        old_rect = renderer.rect
-        old_label_rect = renderer.label_rect
-        old_control_rect = renderer.control_rect
-
-        renderer.rect = orig_rect
-        renderer.label_rect = orig_label_rect
-        renderer.control_rect = orig_control_rect
-
-        # Draw color picker directly on main surface
-        renderer._draw_color_picker(self.image, self.themed_colors)
-
-        # Restore current geometry
-        renderer.rect = old_rect
-        renderer.label_rect = old_label_rect
-        renderer.control_rect = old_control_rect
+        if renderer.color_picker_open:
+            renderer.draw_color_picker(self.image, self.theme_manager)
 
     def _draw_section_header(self, section: PropertySection, rect: pygame.Rect):
-        """Draw a section header"""
+        """Draw a section header with improved styling"""
         if rect.bottom < 0 or rect.y >= self.rect.height:
-            return  # Outside visible area
+            return
 
-        # Calculate visible portion
         visible_rect = rect.clip(pygame.Rect(0, 0, self.rect.width, self.rect.height))
         if visible_rect.width <= 0 or visible_rect.height <= 0:
             return
 
         # Background
-        section_bg = self.themed_colors.get('section_bg', pygame.Color(35, 35, 35))
+        section_bg = self.theme_manager.get_color('section_bg')
         try:
             section_surface = self.image.subsurface(visible_rect)
             section_surface.fill(section_bg)
@@ -1707,47 +1893,54 @@ class PropertyPanel(UIElement):
 
         # Only draw text/icons if the header is mostly visible
         if rect.y >= 0 and rect.bottom <= self.rect.height:
-            # Expand/collapse triangle
-            triangle_x = 8
-            triangle_y = rect.centery
-            triangle_color = self.themed_colors.get('section_text', pygame.Color(200, 200, 200))
+            self._draw_section_content(section, rect)
 
-            if section.expanded:
-                # Down triangle
-                points = [
-                    (triangle_x, triangle_y - 4),
-                    (triangle_x + 8, triangle_y - 4),
-                    (triangle_x + 4, triangle_y + 2)
-                ]
+    def _draw_section_content(self, section: PropertySection, rect: pygame.Rect):
+        """Draw section header content with configurable styling"""
+        layout = self.config.layout
+
+        # Expand/collapse triangle
+        triangle_x = 8
+        triangle_y = rect.centery
+        triangle_color = self.theme_manager.get_color('section_text')
+
+        if section.expanded:
+            # Down triangle
+            points = [
+                (triangle_x, triangle_y - layout.expand_triangle_size),
+                (triangle_x + layout.expand_triangle_size * 2, triangle_y - layout.expand_triangle_size),
+                (triangle_x + layout.expand_triangle_size, triangle_y + layout.expand_triangle_size)
+            ]
+        else:
+            # Right triangle
+            points = [
+                (triangle_x, triangle_y - layout.expand_triangle_size),
+                (triangle_x, triangle_y + layout.expand_triangle_size),
+                (triangle_x + layout.expand_triangle_size + 2, triangle_y)
+            ]
+
+        pygame.draw.polygon(self.image, triangle_color, points)
+
+        # Section label
+        text_x = triangle_x + layout.expand_triangle_size * 3
+        text_color = self.theme_manager.get_color('section_text')
+
+        try:
+            font = self.theme_manager.get_font()
+            if hasattr(font, 'render_premul'):
+                text_surface = font.render_premul(section.label, text_color)
             else:
-                # Right triangle
-                points = [
-                    (triangle_x, triangle_y - 4),
-                    (triangle_x, triangle_y + 4),
-                    (triangle_x + 6, triangle_y)
-                ]
+                text_surface = font.render(section.label, True, text_color)
 
-            pygame.draw.polygon(self.image, triangle_color, points)
+            text_rect = text_surface.get_rect()
+            text_rect.centery = rect.centery
+            text_rect.x = text_x
 
-            # Section label
-            text_x = triangle_x + 12
-            text_color = self.themed_colors.get('section_text', pygame.Color(200, 200, 200))
+            self.image.blit(text_surface, text_rect)
 
-            try:
-                if hasattr(self.themed_font, 'render_premul'):
-                    text_surface = self.themed_font.render_premul(section.label, text_color)
-                else:
-                    text_surface = self.themed_font.render(section.label, True, text_color)
-
-                text_rect = text_surface.get_rect()
-                text_rect.centery = rect.centery
-                text_rect.x = text_x
-
-                self.image.blit(text_surface, text_rect)
-
-            except Exception as e:
-                if PROPERTY_DEBUG:
-                    print(f"Error rendering section header: {e}")
+        except Exception as e:
+            if PROPERTY_DEBUG:
+                print(f"Error rendering section header: {e}")
 
     def process_event(self, event: pygame.event.Event) -> bool:
         """Process pygame events"""
@@ -1790,13 +1983,12 @@ class PropertyPanel(UIElement):
             relative_pos = (event.pos[0] - self.rect.x, event.pos[1] - self.rect.y) if hasattr(event, 'pos') else (0, 0)
             consumed = self.renderers[self.focused_property].handle_event(event, relative_pos)
             if consumed:
-                self._rebuild_image()
+                self.rebuild_image()
 
         return consumed
 
     def _handle_left_click(self, pos: Tuple[int, int]) -> bool:
         """Handle left mouse click"""
-
         # Check if ANY dropdown is open - if so, handle ALL clicks here
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
@@ -1804,17 +1996,17 @@ class PropertyPanel(UIElement):
                 if isinstance(renderer, DropdownPropertyRenderer) and renderer.dropdown_open:
                     # Check if clicking on dropdown options
                     if renderer.property.options:
-                        list_height = len(renderer.property.options) * self.config.row_height
+                        list_height = len(renderer.property.options) * self.config.layout.property_row_height
                         list_rect = pygame.Rect(
                             renderer.control_rect.x,
                             renderer.control_rect.bottom,
                             renderer.control_rect.width,
-                            min(list_height, 200)
+                            min(list_height, self.config.layout.dropdown_max_height)
                         )
 
                         if list_rect.collidepoint(pos):
                             # Calculate which option was clicked
-                            option_index = (pos[1] - list_rect.y) // self.config.row_height
+                            option_index = (pos[1] - list_rect.y) // self.config.layout.property_row_height
                             if 0 <= option_index < len(renderer.property.options):
                                 selected_option = renderer.property.options[option_index]
                                 if renderer.property.option_values:
@@ -1824,15 +2016,15 @@ class PropertyPanel(UIElement):
                                 renderer.set_value(value)
                                 self._check_property_changed(prop_id)
                             renderer.dropdown_open = False
-                            self._rebuild_image()
+                            self.rebuild_image()
                             return True
                         else:
                             # Click outside dropdown - close it AND CONSUME THE CLICK
                             renderer.dropdown_open = False
-                            self._rebuild_image()
-                            return True  # CHANGE: Return True to consume the click
+                            self.rebuild_image()
+                            return True
 
-        # Check if ANY color picker is open - if so, handle ALL clicks here
+        # Check if ANY color picker is open
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
@@ -1845,15 +2037,15 @@ class PropertyPanel(UIElement):
                         )
                         if consumed:
                             self._check_property_changed(prop_id)
-                            self._rebuild_image()
+                            self.rebuild_image()
                         return True
                     else:
                         # Click outside color picker - close it AND CONSUME THE CLICK
                         renderer.color_picker_open = False
-                        self._rebuild_image()
-                        return True  # CHANGE: Return True to consume the click
+                        self.rebuild_image()
+                        return True
 
-        # Only check section headers if NO popups are open
+        # Check section headers
         for section_id, rect in self.section_rects.items():
             if rect.collidepoint(pos):
                 section = self.sections[section_id]
@@ -1867,10 +2059,10 @@ class PropertyPanel(UIElement):
                 pygame.event.post(pygame.event.Event(UI_PROPERTY_SECTION_TOGGLED, event_data))
 
                 self.rebuild_ui()
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
 
-        # Finally check property renderers normally
+        # Check property renderers
         for prop_id in self.visible_properties:
             if prop_id in self.renderers:
                 renderer = self.renderers[prop_id]
@@ -1880,7 +2072,7 @@ class PropertyPanel(UIElement):
                         self._stop_all_editing()
                         self.focused_property = prop_id
                         self.rebuild_ui()
-                        self._rebuild_image()
+                        self.rebuild_image()
 
                     # Forward to renderer
                     consumed = renderer.handle_event(
@@ -1888,9 +2080,15 @@ class PropertyPanel(UIElement):
                         pos
                     )
                     if consumed:
-                        self._rebuild_image()
+                        self.rebuild_image()
                     return True
 
+        if self.focused_property:
+            self._stop_all_editing()
+            self.focused_property = None
+            self.rebuild_ui()
+            self.rebuild_image()
+            return True
         return False
 
     def _handle_right_click(self, pos: Tuple[int, int]) -> bool:
@@ -1923,7 +2121,7 @@ class PropertyPanel(UIElement):
                             pygame.event.Event(pygame.MOUSEBUTTONUP, {'button': 1}), pos
                         )
                         if consumed:
-                            self._rebuild_image()
+                            self.rebuild_image()
                             return True
 
         # Original logic for other renderers
@@ -1931,7 +2129,7 @@ class PropertyPanel(UIElement):
         for renderer in self.renderers.values():
             if renderer.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, {'button': 1}), pos):
                 consumed = True
-                self._rebuild_image()
+                self.rebuild_image()
                 break
         return consumed
 
@@ -1947,17 +2145,17 @@ class PropertyPanel(UIElement):
                 renderer = self.renderers[prop_id]
                 if isinstance(renderer, DropdownPropertyRenderer) and renderer.dropdown_open:
                     if renderer.property.options:
-                        list_height = len(renderer.property.options) * self.config.row_height
+                        list_height = len(renderer.property.options) * self.config.layout.property_row_height
                         list_rect = pygame.Rect(
                             renderer.control_rect.x,
                             renderer.control_rect.bottom,
                             renderer.control_rect.width,
-                            min(list_height, 200)
+                            min(list_height, self.config.layout.dropdown_max_height)
                         )
 
                         if list_rect.collidepoint(pos):
                             mouse_over_dropdown = True
-                            new_hovered_option = (pos[1] - list_rect.y) // self.config.row_height
+                            new_hovered_option = (pos[1] - list_rect.y) // self.config.layout.property_row_height
                             if 0 <= new_hovered_option < len(renderer.property.options):
                                 if new_hovered_option != renderer.hovered_option:
                                     renderer.hovered_option = new_hovered_option
@@ -1972,7 +2170,7 @@ class PropertyPanel(UIElement):
                                 hover_changed = True
 
         # Check color pickers for hover states
-        if not mouse_over_dropdown:  # Only if not over dropdown
+        if not mouse_over_dropdown:
             for prop_id in self.visible_properties:
                 if prop_id in self.renderers:
                     renderer = self.renderers[prop_id]
@@ -1981,7 +2179,7 @@ class PropertyPanel(UIElement):
                             mouse_over_color_picker = True
                             # Forward motion to color picker
                             if renderer.handle_event(
-                                pygame.event.Event(pygame.MOUSEMOTION, {'pos': pos}), pos
+                                    pygame.event.Event(pygame.MOUSEMOTION, {'pos': pos}), pos
                             ):
                                 hover_changed = True
                             break
@@ -2014,28 +2212,44 @@ class PropertyPanel(UIElement):
 
         # Only rebuild if something actually changed
         if hover_changed or renderer_consumed:
-            self._rebuild_image()
+            self.rebuild_image()
 
         return hover_changed or renderer_consumed
 
     def _handle_scroll(self, delta: int) -> bool:
         """Handle scroll wheel"""
-        scroll_speed = self.config.row_height * 3
+        scroll_speed = self.config.layout.property_row_height * self.config.interaction.scroll_speed
         old_scroll = self.scroll_y
         self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - delta * scroll_speed))
 
         if old_scroll != self.scroll_y:
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
 
     def _handle_key_event(self, event: pygame.event.Event) -> bool:
-        """Handle keyboard events"""
+        """Handle keyboard events - FIXED: Check editing state first"""
+        # CHANGE: First check if any renderer is editing and forward to it
+        if self.focused_property and self.focused_property in self.renderers:
+            renderer = self.renderers[self.focused_property]
+            if renderer.is_editing:
+                # If renderer is editing, let it handle the event first
+                if renderer.handle_event(event, (0, 0)):
+                    self._check_property_changed(self.focused_property)
+                    self.rebuild_image()
+                    return True
+                # If renderer didn't consume the event, and it's ESC, stop editing
+                if event.key == pygame.K_ESCAPE:
+                    renderer.stop_editing(False)
+                    self.rebuild_image()
+                    return True
+
+        # Only handle navigation if no renderer is editing
         if event.key == pygame.K_TAB:
             # Tab to next property
-            if self.visible_properties:
+            if self.visible_properties and self.config.behavior.tab_navigation:
                 if self.focused_property:
                     try:
                         current_index = self.visible_properties.index(self.focused_property)
@@ -2053,43 +2267,45 @@ class PropertyPanel(UIElement):
 
                 self._stop_all_editing()
                 self.rebuild_ui()
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
 
         elif event.key == pygame.K_UP:
             # Move to previous property
-            if self.visible_properties and self.focused_property:
+            if (self.visible_properties and self.focused_property and
+                    self.config.behavior.arrow_key_navigation):
                 try:
                     current_index = self.visible_properties.index(self.focused_property)
                     if current_index > 0:
                         self.focused_property = self.visible_properties[current_index - 1]
                         self._stop_all_editing()
                         self.rebuild_ui()
-                        self._rebuild_image()
+                        self.rebuild_image()
                         return True
                 except ValueError:
                     pass
 
         elif event.key == pygame.K_DOWN:
             # Move to next property
-            if self.visible_properties and self.focused_property:
+            if (self.visible_properties and self.focused_property and
+                    self.config.behavior.arrow_key_navigation):
                 try:
                     current_index = self.visible_properties.index(self.focused_property)
                     if current_index < len(self.visible_properties) - 1:
                         self.focused_property = self.visible_properties[current_index + 1]
                         self._stop_all_editing()
                         self.rebuild_ui()
-                        self._rebuild_image()
+                        self.rebuild_image()
                         return True
                 except ValueError:
                     pass
 
-        # Forward to focused renderer if not handled
+        # Forward to focused renderer if not handled and not editing (for things like ENTER, SPACE on controls)
         if self.focused_property and self.focused_property in self.renderers:
             renderer = self.renderers[self.focused_property]
-            if renderer.handle_event(event, (0, 0)):
+            if not renderer.is_editing and renderer.handle_event(event, (0, 0)):
                 self._check_property_changed(self.focused_property)
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
 
         return False
@@ -2100,7 +2316,7 @@ class PropertyPanel(UIElement):
             renderer = self.renderers[self.focused_property]
             if renderer.handle_event(event, (0, 0)):
                 self._check_property_changed(self.focused_property)
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
         return False
 
@@ -2138,18 +2354,78 @@ class PropertyPanel(UIElement):
                     self.change_callback(prop_id, old_value, new_value)
 
     def update(self, time_delta: float):
-        """Update the panel"""
+        """Update the panel with improved performance"""
         super().update(time_delta)
 
-        # Update cursor blink for text renderers
+        # Update renderers for animations
+        needs_rebuild = False
         for renderer in self.renderers.values():
-            if isinstance(renderer, TextPropertyRenderer) and renderer.is_editing:
-                renderer.blink_timer += time_delta
-                if renderer.blink_timer > 0.5:
-                    renderer.show_cursor = not renderer.show_cursor
-                    renderer.blink_timer = 0
-                    # Only rebuild if cursor visibility changed
-                    self._rebuild_image()
+            old_show_cursor = renderer.show_cursor
+            renderer.update(time_delta)
+            if old_show_cursor != renderer.show_cursor:
+                needs_rebuild = True
+
+        if needs_rebuild:
+            self.rebuild_image()
+
+    def set_properties(self, properties: List[PropertySchema], target_object: Any = None):
+        """Set the properties to display with improved configuration handling"""
+        self.target_object = target_object
+        self.properties.clear()
+        self.sections.clear()
+        self.renderers.clear()
+
+        self._original_properties = properties.copy()
+
+        # Organize properties by section with configuration support
+        for prop in properties:
+            if prop.is_hidden():
+                continue
+            if prop.is_advanced() and not self.config.behavior.show_advanced_properties:
+                continue
+
+            self.properties[prop.id] = prop
+
+            section_name = prop.section or "General"
+            if section_name not in self.sections:
+                self.sections[section_name] = PropertySection(
+                    section_name, section_name, True,
+                    order=len(self.sections)
+                )
+
+            self.sections[section_name].properties.append(prop)
+
+        # Sort sections and properties
+        for section in self.sections.values():
+            section.properties.sort(key=lambda p: p.order)
+
+        # Create renderers with configuration
+        self._create_renderers()
+        self.rebuild_ui()
+        self.rebuild_image()
+
+    def _create_renderers(self):
+        """Create property renderers with improved configuration support"""
+        self.renderers.clear()
+
+        for prop in self.properties.values():
+            if prop.property_type == PropertyType.TEXT or prop.property_type == PropertyType.MULTILINE_TEXT:
+                renderer = TextPropertyRenderer(prop, self.config)
+            elif prop.property_type == PropertyType.NUMBER or prop.property_type == PropertyType.SLIDER:
+                renderer = NumberPropertyRenderer(prop, self.config)
+            elif prop.property_type == PropertyType.BOOLEAN:
+                renderer = BooleanPropertyRenderer(prop, self.config)
+            elif prop.property_type == PropertyType.DROPDOWN:
+                renderer = DropdownPropertyRenderer(prop, self.config)
+            elif prop.property_type == PropertyType.COLOR:
+                renderer = ColorPropertyRenderer(prop, self.config)
+            elif prop.property_type == PropertyType.VECTOR2 or prop.property_type == PropertyType.VECTOR3:
+                renderer = VectorPropertyRenderer(prop, self.config)
+            else:
+                # Default to text renderer
+                renderer = TextPropertyRenderer(prop, self.config)
+
+            self.renderers[prop.id] = renderer
 
     # Public API methods
     def set_property_value(self, prop_id: str, value: Any):
@@ -2158,7 +2434,7 @@ class PropertyPanel(UIElement):
             self.properties[prop_id].value = value
             if prop_id in self.renderers:
                 self.renderers[prop_id].set_value(value)
-            self._rebuild_image()
+            self.rebuild_image()
 
     def get_property_value(self, prop_id: str) -> Any:
         """Get a property value"""
@@ -2191,21 +2467,20 @@ class PropertyPanel(UIElement):
         if section_id in self.sections:
             self.sections[section_id].expanded = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
     def collapse_section(self, section_id: str):
         """Collapse a section"""
         if section_id in self.sections:
             self.sections[section_id].expanded = False
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
     def show_advanced_properties(self, show: bool):
         """Show or hide advanced properties"""
-        if self.config.show_advanced_properties != show:
-            self.config.show_advanced_properties = show
+        if self.config.behavior.show_advanced_properties != show:
+            self.config.behavior.show_advanced_properties = show
             # Need to rebuild everything since visibility changed
-            # properties = list(self.properties.values())
             properties = self._original_properties
             target = self.target_object
             self.set_properties(properties, target)
@@ -2213,10 +2488,41 @@ class PropertyPanel(UIElement):
     def refresh(self):
         """Refresh the inspector display"""
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
+
+    # Configuration update methods
+    def update_layout_config(self, layout_config: PropertyLayoutConfig):
+        """Update layout configuration and rebuild"""
+        # Create a deep copy to avoid reference issues
+        self.config.layout = copy.deepcopy(layout_config)
+        # Force rebuild by clearing state cache
+        self._last_rebuild_state = None
+        self.rebuild_ui()
+        self.rebuild_image()
+        print(f"Layout updated - row height: {self.config.layout.property_row_height}")
+
+    def update_behavior_config(self, behavior_config: PropertyBehaviorConfig):
+        """Update behavior configuration"""
+        old_show_advanced = self.config.behavior.show_advanced_properties
+        self.config.behavior = copy.deepcopy(behavior_config)
+
+        # Only rebuild properties if advanced property visibility changed
+        if old_show_advanced != behavior_config.show_advanced_properties:
+            if hasattr(self, '_original_properties'):
+                self.set_properties(self._original_properties, self.target_object)
+        else:
+            # Force rebuild by clearing state cache
+            self._last_rebuild_state = None
+            self.rebuild_ui()
+            self.rebuild_image()
+        print(f"Behavior updated - advanced: {self.config.behavior.show_advanced_properties}")
+
+    def update_interaction_config(self, interaction_config: PropertyInteractionConfig):
+        """Update interaction configuration"""
+        self.config.interaction = interaction_config
 
 
-# Example theme for property inspector
+# Example theme for property inspector with comprehensive styling
 PROPERTY_INSPECTOR_THEME = {
     "property_inspector": {
         "colours": {
@@ -2236,7 +2542,11 @@ PROPERTY_INSPECTOR_THEME = {
             "error_bg": "#3c1414",
             "error_text": "#ff6464",
             "accent": "#64c864",
-            "normal_border": "#505050"
+            "normal_border": "#505050",
+            "warning_bg": "#503c14",
+            "warning_text": "#ffc864",
+            "valid_bg": "#143c14",
+            "valid_text": "#64ff64"
         },
         "font": {
             "name": "arial",
@@ -2249,9 +2559,9 @@ PROPERTY_INSPECTOR_THEME = {
 
 
 def create_sample_properties() -> List[PropertySchema]:
-    """Create sample properties for testing"""
+    """Create sample properties for testing with improved variety"""
     properties = [
-        # Transform section
+        # General section
         PropertySchema(
             id="name",
             label="Name",
@@ -2272,6 +2582,7 @@ def create_sample_properties() -> List[PropertySchema]:
             tooltip="Whether this object is active"
         ),
 
+        # Transform section
         PropertySchema(
             id="position",
             label="Position",
@@ -2440,30 +2751,39 @@ class SampleObject:
 
 
 def main():
-    """Example demonstration of the Property Inspector Panel"""
+    """Example demonstration with comprehensive configuration"""
     pygame.init()
-    screen = pygame.display.set_mode((1000, 700))
-    pygame.display.set_caption("Property Inspector Panel Demo")
+    screen = pygame.display.set_mode((1200, 800))
+    pygame.display.set_caption("Configurable Property Inspector Demo")
     clock = pygame.time.Clock()
 
     # Create manager with theme
-    manager = pygame_gui.UIManager((1000, 700), PROPERTY_INSPECTOR_THEME)
+    manager = pygame_gui.UIManager((1200, 800), PROPERTY_INSPECTOR_THEME)
 
     # Create sample object and properties
     sample_object = SampleObject()
     properties = create_sample_properties()
 
-    # Configure property inspector
-    config = PropertyConfig()
-    config.show_advanced_properties = False  # Start with basic properties
-    config.live_editing = True
-    config.show_tooltips = True
+    # Create different configurations for demonstration
+    compact_config = PropertyConfig()
+    compact_config.property_row_height = 18
+    compact_config.layout.section_header_height = 16
+    compact_config.layout.min_label_width = 40
+    compact_config.layout.control_padding = 1
+    compact_config.behavior.show_advanced_properties = False
 
-    # Create property inspector
+    large_config = PropertyConfig()
+    large_config.layout.property_row_height = 25
+    large_config.layout.section_header_height = 40
+    large_config.layout.min_label_width = 180
+    large_config.layout.control_padding = 15
+    large_config.behavior.show_advanced_properties = True
+
+    # Create property inspector with compact config initially
     property_inspector = PropertyPanel(
         pygame.Rect(50, 50, 400, 600),
         manager,
-        config,
+        compact_config,
         object_id=ObjectID(object_id='#main_inspector', class_id='@property_panel')
     )
 
@@ -2471,21 +2791,19 @@ def main():
     property_inspector.set_properties(properties, sample_object)
 
     # Set up change callback
-    def on_property_changed(prop_id: str, old_value: Any, new_value: Any):
+    def on_property_changed(given_prop_id: str, old_value: Any, new_value: Any):
         if PROPERTY_DEBUG:
-            print(f"Property changed: {prop_id} = {old_value} -> {new_value}")
+            print(f"Property changed: {given_prop_id} = {old_value} -> {new_value}")
 
     property_inspector.set_change_callback(on_property_changed)
 
     # Instructions
-    print("\nProperty Inspector Panel Demo")
-    print("\nFeatures:")
-    print("- Multiple property types (text, number, boolean, dropdown, color, vector)")
-    print("- Collapsible sections")
-    print("- Live editing with validation")
-    print("- Keyboard navigation (Tab, Arrow keys)")
-    print("- Theme support")
-    print("- Advanced property hiding/showing")
+    print("\nConfigurable Property Inspector Demo")
+    print("\nNew Features:")
+    print("- Comprehensive configuration system")
+    print("- Improved theme management")
+    print("- Better performance and rendering")
+    print("- Enhanced configuration flexibility")
 
     print("\nControls:")
     print("- Click properties to edit")
@@ -2495,13 +2813,18 @@ def main():
     print("- Right-click for context actions")
     print("- Mouse wheel to scroll")
 
-    print("\nPress A to toggle advanced properties")
-    print("Press R to reset all properties")
-    print("Press S to save current values")
-    print("Press L to load sample values\n")
+    print("\nConfiguration Controls:")
+    print("Press 'C' for compact layout")
+    print("Press 'L' for large layout")
+    print("Press 'A' to toggle advanced properties")
+    print("Press 'R' to reset all properties")
+    print("Press 'S' to save current values")
+    print("Press 'V' to load sample values")
+    print("Press 'T' to toggle theme colors\n")
 
     # State variables
     show_advanced = False
+    current_config = "compact"
 
     running = True
     while running:
@@ -2512,34 +2835,110 @@ def main():
                 running = False
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_a:
-                    # Toggle advanced properties
-                    show_advanced = not show_advanced
-                    property_inspector.show_advanced_properties(show_advanced)
-                    print(f"Advanced properties: {'shown' if show_advanced else 'hidden'}")
+                any_text_editing = any(
+                    renderer.is_editing
+                    for renderer in property_inspector.renderers.values()
+                    if isinstance(renderer, (TextPropertyRenderer, NumberPropertyRenderer, VectorPropertyRenderer))
+                )
 
-                elif event.key == pygame.K_r:
-                    # Reset all properties to defaults
-                    for prop in properties:
-                        if prop.default_value is not None:
-                            property_inspector.reset_property(prop.id)
-                    print("Reset all properties to defaults")
+                # Only process hotkeys if not editing text
+                if not any_text_editing:
+                    if event.key == pygame.K_c:
+                        # Switch to compact layout
+                        # property_inspector.update_layout_config(compact_config.layout)
+                        # property_inspector.update_behavior_config(compact_config.behavior)
+                        # current_config = "compact"
+                        # print("Switched to compact layout")
+                        # TODO: Fix update_layout_config and update_behavior_config
+                        property_inspector.config.layout.property_row_height = 18
+                        property_inspector.config.layout.section_header_height = 16
+                        property_inspector.config.layout.min_label_width = 40
+                        property_inspector.config.layout.control_padding = 1
+                        property_inspector.config.behavior.show_advanced_properties = False
+                        property_inspector._last_rebuild_state = None
+                        property_inspector.rebuild_ui()
+                        property_inspector.rebuild_image()
+                        current_config = "compact"
+                        print("Switched to compact layout")
 
-                elif event.key == pygame.K_s:
-                    # Save current values (demonstrate getting values)
-                    print("Current property values:")
-                    for prop in properties:
-                        value = property_inspector.get_property_value(prop.id)
-                        print(f"  {prop.label}: {value}")
+                    elif event.key == pygame.K_l:
+                        # Switch to large layout
+                        # property_inspector.update_layout_config(large_config.layout)
+                        # property_inspector.update_behavior_config(large_config.behavior)
+                        # current_config = "large"
+                        # print("Switched to large layout")
+                        # TODO: Fix update_layout_config and update_behavior_config
+                        property_inspector.config.layout.property_row_height = 25
+                        property_inspector.config.layout.section_header_height = 40
+                        property_inspector.config.layout.min_label_width = 180
+                        property_inspector.config.layout.control_padding = 15
+                        property_inspector.config.behavior.show_advanced_properties = True
+                        property_inspector._last_rebuild_state = None
+                        property_inspector.rebuild_ui()
+                        property_inspector.rebuild_image()
+                        current_config = "large"
+                        print("Switched to large layout")
 
-                elif event.key == pygame.K_l:
-                    # Load sample values
-                    property_inspector.set_property_value("name", "Loaded Object")
-                    property_inspector.set_property_value("position", [10, 5, -3])
-                    property_inspector.set_property_value("color", pygame.Color(255, 100, 50))
-                    property_inspector.set_property_value("material", "Metal")
-                    property_inspector.set_property_value("mass", 2.5)
-                    print("Loaded sample values")
+                    elif event.key == pygame.K_a:
+                        # Toggle advanced properties
+                        show_advanced = not show_advanced
+                        property_inspector.show_advanced_properties(show_advanced)
+                        print(f"Advanced properties: {'shown' if show_advanced else 'hidden'}")
+
+                    elif event.key == pygame.K_r:
+                        # Reset all properties to defaults
+                        for prop in properties:
+                            if prop.default_value is not None:
+                                property_inspector.reset_property(prop.id)
+                        print("Reset all properties to defaults")
+
+                    elif event.key == pygame.K_s:
+                        # Save current values (demonstrate getting values)
+                        print(f"Current property values ({current_config} layout):")
+                        for prop in properties:
+                            if not prop.is_hidden() and (not prop.is_advanced() or show_advanced):
+                                value = property_inspector.get_property_value(prop.id)
+                                print(f"  {prop.label}: {value}")
+
+                    elif event.key == pygame.K_v:
+                        # Load sample values
+                        property_inspector.set_property_value("name", "Configured Object")
+                        property_inspector.set_property_value("position", [10, 5, -3])
+                        property_inspector.set_property_value("color", pygame.Color(255, 100, 50))
+                        property_inspector.set_property_value("material", "Metal")
+                        property_inspector.set_property_value("mass", 2.5)
+                        print("Loaded sample values")
+
+
+                    elif event.key == pygame.K_t:
+                        # Toggle some theme colors for demonstration
+                        theme_manager = property_inspector.theme_manager
+                        # current_bg = theme_manager.get_color('dark_bg')
+
+                        # Theme switching
+                        if not hasattr(property_inspector, 'is_light_theme'):
+                            property_inspector.is_light_theme = False
+
+                        if not property_inspector.is_light_theme:
+                            # Switch to lighter theme
+                            theme_manager.themed_colors['dark_bg'] = pygame.Color(80, 80, 80)
+                            theme_manager.themed_colors['section_bg'] = pygame.Color(70, 70, 70)
+                            theme_manager.themed_colors['control_bg'] = pygame.Color(100, 100, 100)
+                            theme_manager.themed_colors['normal_text'] = pygame.Color(0, 0, 0)
+                            theme_manager.themed_colors['control_text'] = pygame.Color(0, 0, 0)
+                            theme_manager.themed_colors['readonly_text'] = pygame.Color(40, 40, 40)
+                            property_inspector.is_light_theme = True
+                            print("Switched to light theme")
+                        else:
+                            # Switch back to dark theme
+                            theme_manager.themed_colors['dark_bg'] = pygame.Color(45, 45, 45)
+                            theme_manager.themed_colors['section_bg'] = pygame.Color(35, 35, 35)
+                            theme_manager.themed_colors['control_bg'] = pygame.Color(60, 60, 60)
+                            theme_manager.themed_colors['normal_text'] = pygame.Color(255, 255, 255)
+                            theme_manager.themed_colors['control_text'] = pygame.Color(255, 255, 255)
+                            property_inspector.is_light_theme = False
+                            print("Switched to dark theme")
+                        property_inspector.rebuild_image()
 
             # Handle property inspector events
             elif event.type == UI_PROPERTY_CHANGED:
@@ -2573,87 +2972,43 @@ def main():
 
         # Draw some info text
         font = pygame.font.Font(None, 24)
-        info_text = font.render("Property Inspector Demo", True, pygame.Color(255, 255, 255))
+        info_text = font.render("Configurable Property Inspector Demo", True, pygame.Color(255, 255, 255))
         screen.blit(info_text, (500, 50))
 
-        # Draw current object state
+        # Draw configuration info
         y_offset = 100
         info_font = pygame.font.Font(None, 18)
 
-        # Show ALL properties instead of just key ones
-        all_properties = property_inspector.properties
-        for prop_id, prop_schema in all_properties.items():
-            value = property_inspector.get_property_value(prop_id)
-            if value is not None:
-                # Format the value for display
-                if isinstance(value, list):
-                    if all(isinstance(v, (int, float)) for v in value):
-                        value_str = f"[{', '.join(f'{v:.2f}' if isinstance(v, float) else str(v) for v in value)}]"
-                    else:
-                        value_str = f"[{', '.join(str(v) for v in value)}]"
-                elif isinstance(value, float):
-                    value_str = f"{value:.3f}"
-                elif isinstance(value, pygame.Color):
-                    if value.a < 255:
-                        value_str = f"RGBA({value.r}, {value.g}, {value.b}, {value.a})"
-                    else:
-                        value_str = f"RGB({value.r}, {value.g}, {value.b})"
-                elif isinstance(value, bool):
-                    value_str = "True" if value else "False"
-                else:
-                    value_str = str(value)
+        config_info = [
+            f"Current Layout: {current_config.title()}",
+            f"Row Height: {property_inspector.config.layout.property_row_height}px",
+            f"Advanced Properties: {'Shown' if show_advanced else 'Hidden'}",
+            f"Properties Visible: {len(property_inspector.visible_properties)}",
+            f"Sections: {len(property_inspector.sections)}",
+        ]
 
-                # Show property label and value
-                display_text = f"{prop_schema.label}: {value_str}"
+        for i, info in enumerate(config_info):
+            text = info_font.render(info, True, pygame.Color(200, 200, 200))
+            screen.blit(text, (500, y_offset + i * 22))
 
-                # Add section info for better organization
-                section_name = prop_schema.section or "General"
-                if prop_schema.is_advanced():
-                    display_text += " (Advanced)"
-                if prop_schema.is_readonly():
-                    display_text += " (Read-only)"
-
-                # Color code by section
-                text_color = pygame.Color(200, 200, 200)  # Default
-                if section_name == "Transform":
-                    text_color = pygame.Color(150, 255, 150)  # Green
-                elif section_name == "Rendering":
-                    text_color = pygame.Color(255, 200, 150)  # Orange
-                elif section_name == "Physics":
-                    text_color = pygame.Color(150, 200, 255)  # Blue
-                elif section_name == "Advanced":
-                    text_color = pygame.Color(255, 150, 255)  # Magenta
-
-                # Dim readonly properties
-                if prop_schema.is_readonly():
-                    text_color = pygame.Color(text_color.r // 2, text_color.g // 2, text_color.b // 2)
-
-                text = info_font.render(display_text, True, text_color)
-                screen.blit(text, (500, y_offset))
-                y_offset += 22
-
-        # Add section headers for better organization
-        section_offsets = {}
-        current_y = 100
-        sections_order = ["General", "Transform", "Rendering", "Physics", "Advanced"]
-
-        # Draw section-organized view on the right side
-        section_x = 750
-        section_y = 100
+        # Draw current object state in organized sections
+        y_offset = 220
         section_font = pygame.font.Font(None, 20)
         property_font = pygame.font.Font(None, 16)
 
+        sections_order = ["General", "Transform", "Rendering", "Physics", "Advanced"]
         for section_name in sections_order:
             # Check if we have properties in this section
-            section_props = [prop for prop in all_properties.values() if (prop.section or "General") == section_name]
+            section_props = [prop for prop in property_inspector.properties.values()
+                             if (prop.section or "General") == section_name]
             if not section_props:
                 continue
 
             # Draw section header
             section_color = pygame.Color(255, 255, 255)
             section_text = section_font.render(f"=== {section_name} ===", True, section_color)
-            screen.blit(section_text, (section_x, section_y))
-            section_y += 25
+            screen.blit(section_text, (500, y_offset))
+            y_offset += 25
 
             # Draw properties in this section
             for prop in sorted(section_props, key=lambda p: p.order):
@@ -2689,15 +3044,16 @@ def main():
                         prop_color = pygame.Color(200, 150, 200)
 
                     prop_text = property_font.render(display_text, True, prop_color)
-                    screen.blit(prop_text, (section_x, section_y))
-                    section_y += 18
+                    screen.blit(prop_text, (500, y_offset))
+                    y_offset += 18
 
-            section_y += 10  # Extra space between sections
+            y_offset += 10  # Extra space between sections
 
         # Draw validation status
         errors = property_inspector.validate_all_properties()
         if errors:
-            error_text = info_font.render(f"Validation errors: {len(errors)}", True, pygame.Color(255, 100, 100))
+            error_text = info_font.render(f"Validation errors: {len(errors)}", True,
+                                          pygame.Color(255, 100, 100))
             screen.blit(error_text, (500, y_offset + 20))
             for prop_id, error in errors.items():
                 error_detail = info_font.render(f"  {prop_id}: {error}", True, pygame.Color(255, 150, 150))
