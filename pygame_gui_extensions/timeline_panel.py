@@ -735,8 +735,8 @@ class TimelinePanel(UIElement):
         self.selection: List[Tuple[str, str, int]] = []  # [(layer_id, curve_name, frame)]
 
         # Playback timing
-        self.last_playback_time = 0.0
-        self.playback_start_frame = 0.0
+        # self.last_playback_time = 0.0
+        # self.playback_start_frame = 0.0
 
         # View settings
         self.zoom = 1.0
