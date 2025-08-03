@@ -30,10 +30,7 @@ Comprehensive property editing interface:
 - Essential companion to hierarchy panels for object editing
 ![Property Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/PropertyPanel.png "Property Panel")
 
----
-
-# Work in Progess Panels
-### 7. **Node Editor Panel**
+### **Node Editor Panel**
 Visual programming interface:
 - Draggable nodes with input/output sockets
 - Bezier curve connections
@@ -42,7 +39,7 @@ Visual programming interface:
 - Would pair excellently with the property inspector
 ![Node Editor Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NodeEditorPanel.png "Node Editor Panel")
 
-### 8. **Timeline/Animation Panel**
+### **Timeline/Animation Panel**
 For keyframe animation:
 - Scrubbing timeline with frame markers
 - Keyframe editing and curves
@@ -50,8 +47,11 @@ For keyframe animation:
 - Playback controls
 - Integration with the hierarchy for animated objects
 ![Timeline Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/TimelinePanel.png "Timeline Panel")
+---
 
-### 10. **Asset Browser Panel**
+# Work in Progess Panels
+
+### **Asset Browser Panel**
 Media asset management:
 - Preview thumbnails for images/models
 - Metadata display and editing
@@ -60,7 +60,7 @@ Media asset management:
 - Drag-and-drop to hierarchy
 ![Asset Browser Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/AssetBrowserPanel.png "Asset Browser Panel")
 
-### 11. **Mini-map/Navigator Panel**
+### **Mini-map/Navigator Panel**
 For large content areas:
 - Thumbnail view of large canvases
 - Viewport indicator and navigation
@@ -117,7 +117,7 @@ Organized tool selection:
 - Tool descriptions and shortcuts
 
 ## **High Impact, High Complexity**
-### 9. **Chart/Graph Panel**
+### 7. **Chart/Graph Panel**
 Data visualization component:
 - Line charts, bar charts, pie charts
 - Real-time data updates
@@ -126,7 +126,7 @@ Data visualization component:
 - Great for debugging and analytics
 
 ## **Specialized**
-### 12. **Log Viewer Panel**
+### 8. **Log Viewer Panel**
 Advanced logging interface:
 - Filtering by level/category
 - Search and highlighting
