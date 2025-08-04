@@ -56,10 +56,6 @@ For large content areas:
 - Works great with node editors or large hierarchies
 ![Navigator Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NavigatorPanel.png "Navigator Panel")
 
----
-
-# Work in Progess Panels
-
 ### **Asset Browser Panel**
 Media asset management:
 - Preview thumbnails for images/models
@@ -71,22 +67,8 @@ Media asset management:
 
 ---
 
-## Future Panels
-## **High Impact, Medium Complexity**
-### 1. **Console/Terminal Panel**
-A powerful console for logging, command execution, and REPL functionality:
-- Command history with up/down arrows
-- Auto-completion and syntax highlighting
-- Scrollable output with filtering
-- Command aliases and macros
-- Integration with Python `exec()` for live scripting
-### 2. **Code Editor Panel** 
-A syntax-highlighted text editor:
-- Line numbers and folding
-- Find/replace with regex support
-- Bracket matching and indentation guides
-- Multiple language support (Python, JSON, etc.)
-- Integration with the property inspector for script editing
+# Work in Progess Panels / System
+
 ### 3. **Docking System**
 A framework for dockable panels:
 - Drag-and-drop panel arrangement
@@ -94,8 +76,27 @@ A framework for dockable panels:
 - Splitter controls for resizing
 - Save/restore layouts
 - Would make the hierarchy + property panels even more useful
+  
+---
 
-## **Medium Impact, Lower Complexity**
+## Future Panels
+
+### 1. **Console/Terminal Panel**
+A powerful console for logging, command execution, and REPL functionality:
+- Command history with up/down arrows
+- Auto-completion and syntax highlighting
+- Scrollable output with filtering
+- Command aliases and macros
+- Integration with Python `exec()` for live scripting
+  
+### 2. **Code Editor Panel** 
+A syntax-highlighted text editor:
+- Line numbers and folding
+- Find/replace with regex support
+- Bracket matching and indentation guides
+- Multiple language support (Python, JSON, etc.)
+- Integration with the property inspector for script editing
+  
 ### 4. **File Browser Panel**
 Enhanced file system navigation:
 - Thumbnail previews for images
@@ -103,6 +104,7 @@ Enhanced file system navigation:
 - Breadcrumb navigation
 - Recent files and bookmarks
 - Integration with the hierarchy panel for project files
+  
 ### 5. **Data Grid/Table Panel**
 Spreadsheet-like component:
 - Sortable columns with custom comparers
@@ -110,14 +112,14 @@ Spreadsheet-like component:
 - Row selection and highlighting
 - Export to CSV/JSON
 - Perfect complement to the property inspector
+  
 ### 6. **Tool Palette Panel**
 Organized tool selection:
 - Categorized tool groups
 - Search and favorites
 - Customizable layouts (grid/list)
 - Tool descriptions and shortcuts
-
-## **High Impact, High Complexity**
+  
 ### 7. **Chart/Graph Panel**
 Data visualization component:
 - Line charts, bar charts, pie charts
@@ -126,7 +128,6 @@ Data visualization component:
 - Export to image formats
 - Great for debugging and analytics
 
-## **Specialized**
 ### 8. **Log Viewer Panel**
 Advanced logging interface:
 - Filtering by level/category
