@@ -65,9 +65,19 @@ Media asset management:
 - Drag-and-drop to hierarchy
 ![Asset Browser Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/AssetBrowserPanel.png "Asset Browser Panel")
 
+
+### **Console/Terminal Panel**
+A powerful console for logging, command execution, and REPL functionality:
+- Command history with up/down arrows
+- Auto-completion and syntax highlighting
+- Scrollable output with filtering
+- Command aliases and macros
+- Integration with Python `exec()` for live scripting
+![Console Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ConsolePanel.png "Console Panel")
+
 ---
 
-# Work in Progess Panels / System
+# Work in Progress:
 
 ### 3. **Docking System**
 A framework for dockable panels:
@@ -76,19 +86,11 @@ A framework for dockable panels:
 - Splitter controls for resizing
 - Save/restore layouts
 - Would make the hierarchy + property panels even more useful
-  
+![Docking System](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/DockingSystem.png "Docking System")
+
 ---
 
 ## Future Panels
-
-### 1. **Console/Terminal Panel**
-A powerful console for logging, command execution, and REPL functionality:
-- Command history with up/down arrows
-- Auto-completion and syntax highlighting
-- Scrollable output with filtering
-- Command aliases and macros
-- Integration with Python `exec()` for live scripting
-  
 ### 2. **Code Editor Panel** 
 A syntax-highlighted text editor:
 - Line numbers and folding
