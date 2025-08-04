@@ -244,16 +244,26 @@ class TabGroup:
         self._update_layout()
 
     def remove_container(self, container: DockContainer) -> bool:
-        """Remove a container from the tab group"""
-        if container in self.containers:
-            index = self.containers.index(container)
-            self.containers.remove(container)
+        """Remove a container from this zone"""
+        if self.zone_type == DockZoneType.CONTAINER and self.tab_group:
+            success = self.tab_group.remove_container(container)
+            if success:
+                container.dock_zone = None
+                # Clean up empty tab group
+                if len(self.tab_group.containers) == 0:
+                    self.tab_group = None
+                    # If this zone is now empty and has a parent, clean up
+                    if self.parent_zone:
+                        self.parent_zone._cleanup_empty_children()
+            return success
 
-            if self.active_index >= len(self.containers):
-                self.active_index = max(0, len(self.containers) - 1)
-
-            self._update_layout()
-            return True
+        elif self.zone_type == DockZoneType.SPLITTER:
+            # Try to remove from child zones
+            for zone in self.child_zones:
+                if zone.remove_container(container):
+                    # Clean up after removal
+                    self._cleanup_empty_children()
+                    return True
         return False
 
     def get_active_container(self) -> Optional[DockContainer]:
@@ -347,6 +357,9 @@ class TabGroup:
 
     def handle_mouse_motion(self, pos: Tuple[int, int]):
         """Handle mouse motion for hover effects and dragging"""
+        # Reset hover states
+        old_hovered_tab = self.hovered_tab
+        old_hovered_close = self.hovered_close_button
         self.hovered_tab = -1
         self.hovered_close_button = -1
 
@@ -357,23 +370,23 @@ class TabGroup:
                              (pos[1] - self.drag_start_pos[1]) ** 2) ** 0.5
 
             if drag_distance > 5:  # Minimum drag distance
-                # Check if we should reorder tabs
+                # Find which tab we're hovering over
                 for i, tab_rect in enumerate(self.tab_rects):
                     if i != self.dragging_tab and tab_rect.collidepoint(pos):
                         # Reorder tabs
                         self._reorder_tabs(self.dragging_tab, i)
                         self.dragging_tab = i
-                        break
-            return
+                        return  # Return early to avoid normal hover processing
 
-        # Normal hover handling
-        for i, tab_rect in enumerate(self.tab_rects):
-            if tab_rect.collidepoint(pos):
-                self.hovered_tab = i
-                if (i < len(self.close_button_rects) and
-                        self.close_button_rects[i].collidepoint(pos)):
-                    self.hovered_close_button = i
-                break
+        # Normal hover handling (only if not dragging)
+        if self.dragging_tab < 0:
+            for i, tab_rect in enumerate(self.tab_rects):
+                if tab_rect.collidepoint(pos):
+                    self.hovered_tab = i
+                    if (i < len(self.close_button_rects) and
+                            self.close_button_rects[i].collidepoint(pos)):
+                        self.hovered_close_button = i
+                    break
 
     def handle_mouse_up(self) -> bool:
         """Handle mouse up - stop dragging"""
@@ -399,6 +412,7 @@ class TabGroup:
             elif to_index <= self.active_index < from_index:
                 self.active_index += 1
 
+            # Force layout update
             self._update_layout()
 
     def draw(self, surface: pygame.Surface):
@@ -410,9 +424,12 @@ class TabGroup:
         for i, (container, tab_rect) in enumerate(zip(self.containers, self.tab_rects)):
             is_active = (i == self.active_index)
             is_hovered = (i == self.hovered_tab)
+            is_dragging = (i == self.dragging_tab)
 
             # Tab background
-            if is_active:
+            if is_dragging:
+                bg_color = self.theme_manager.get_color('drop_indicator')  # Special color for dragging
+            elif is_active:
                 bg_color = self.theme_manager.get_color('tab_active_bg')
             elif is_hovered:
                 bg_color = self.theme_manager.get_color('tab_hover_bg')
@@ -628,6 +645,15 @@ class DockZone:
         # Parent relationship
         self.parent_zone: Optional['DockZone'] = None
 
+    def force_layout_update(self):
+        """Force a complete layout update recursively"""
+        if self.zone_type == DockZoneType.CONTAINER and self.tab_group:
+            self.tab_group._update_layout()
+        elif self.zone_type == DockZoneType.SPLITTER:
+            self._update_splitter_layout()
+            for child in self.child_zones:
+                child.force_layout_update()
+
     def is_empty(self) -> bool:
         """Check if this zone is empty"""
         if self.zone_type == DockZoneType.CONTAINER:
@@ -737,16 +763,28 @@ class DockZone:
         if len(self.child_zones) == 1:
             remaining_zone = self.child_zones[0]
             if remaining_zone.zone_type == DockZoneType.CONTAINER:
+                # Preserve the remaining zone's content
                 self.zone_type = DockZoneType.CONTAINER
                 self.tab_group = remaining_zone.tab_group
+
+                # Update parent references for containers
+                if self.tab_group:
+                    for container in self.tab_group.containers:
+                        container.dock_zone = self
+                    # Update tab group rect to match this zone
+                    self.tab_group.set_rect(self.rect)
+
+                # Clear splitter data
                 self.child_zones.clear()
                 self.splitter = None
                 self.split_direction = None
 
-                # Update parent references
-                if self.tab_group:
-                    for container in self.tab_group.containers:
-                        container.dock_zone = self
+        # If no children remain, ensure we're marked as empty
+        elif len(self.child_zones) == 0:
+            self.zone_type = DockZoneType.CONTAINER
+            self.tab_group = None
+            self.splitter = None
+            self.split_direction = None
 
     def _update_splitter_layout(self):
         """Update layout for splitter zone"""
@@ -800,9 +838,9 @@ class DockZone:
                 self.rect.right - (split_x + splitter_size), self.rect.height
             )
 
-        # Update child zones and splitter
-        self.child_zones[0].set_rect(zone1_rect)
-        self.child_zones[1].set_rect(zone2_rect)
+        # Update child zones with the new calculated rects
+        self.child_zones[0].set_rect(zone1_rect)  # Pass the new rect
+        self.child_zones[1].set_rect(zone2_rect)  # Pass the new rect
         self.splitter.set_rect(splitter_rect)
 
     def set_rect(self, rect: pygame.Rect):
@@ -866,6 +904,7 @@ class DockZone:
                 self.splitter and self.splitter.is_dragging):
             self.splitter.handle_drag(pos, self.rect)
             self._update_splitter_layout()
+            # Need to trigger a redraw in the parent DockingManager
             return True
         return False
 
@@ -1071,6 +1110,9 @@ class DockingManager(UIElement):
             # Remove from tracking
             del self.containers[panel_id]
 
+            # Force a complete layout rebuild
+            self._force_complete_layout_update()
+
             # Post event
             event_data = {
                 'panel_id': panel_id,
@@ -1083,6 +1125,19 @@ class DockingManager(UIElement):
             self.rebuild_image()
 
         return success
+
+    def _force_complete_layout_update(self):
+        """Force a complete layout update of all zones"""
+
+        def update_zone_recursive(zone: DockZone):
+            if zone.zone_type == DockZoneType.CONTAINER and zone.tab_group:
+                zone.tab_group._update_layout()
+            elif zone.zone_type == DockZoneType.SPLITTER:
+                zone._update_splitter_layout()
+                for child in zone.child_zones:
+                    update_zone_recursive(child)
+
+        update_zone_recursive(self.root_zone)
 
     def get_panel(self, panel_id: str) -> Optional[UIElement]:
         """Get a panel by ID"""
@@ -1184,37 +1239,48 @@ class DockingManager(UIElement):
         consumed = False
 
         try:
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click only
                 if self.rect.collidepoint(event.pos):
                     relative_pos = (event.pos[0] - self.rect.x, event.pos[1] - self.rect.y)
                     result = self.root_zone.handle_mouse_click(relative_pos)
 
                     if result:
                         if result.startswith('close_tab_'):
-                            # Extract tab index and find the container to close
+                            # Handle close button click
                             try:
-                                tab_index = int(result.split('_')[-1])
-                                # Find which tab group this belongs to and close the right panel
-                                closed = self._handle_close_tab(relative_pos, tab_index)
-                                consumed = closed
-                            except (ValueError, IndexError):
-                                pass
+                                parts = result.split('_')
+                                if len(parts) >= 3:
+                                    tab_index = int(parts[2])
+                                    closed = self._handle_close_tab_by_index(relative_pos, tab_index)
+                                    if closed:
+                                        self.rebuild_image()
+                                    consumed = True
+                            except (ValueError, IndexError) as e:
+                                print(f"Error parsing close tab result: {e}")
                         elif result.startswith('select_tab_'):
-                            # Tab selection is already handled
+                            # Tab selection
+                            self.rebuild_image()
                             consumed = True
                         elif result == 'splitter_drag':
                             consumed = True
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                consumed = self.root_zone.handle_mouse_up()
+                was_dragging = self.root_zone.handle_mouse_up()
+                if was_dragging:
+                    self.rebuild_image()
+                consumed = was_dragging
 
             elif event.type == pygame.MOUSEMOTION:
                 if self.rect.collidepoint(event.pos):
                     relative_pos = (event.pos[0] - self.rect.x, event.pos[1] - self.rect.y)
+
+                    # Handle motion (includes dragging and hover)
                     cursor_hint = self.root_zone.handle_mouse_motion(relative_pos)
 
-                    # Handle drag
-                    self.root_zone.handle_mouse_drag(relative_pos)
+                    # Handle splitter dragging
+                    layout_changed = self.root_zone.handle_mouse_drag(relative_pos)
+                    if layout_changed:
+                        self.rebuild_image()
 
                     # Update cursor
                     if cursor_hint != self.current_cursor:
@@ -1235,7 +1301,11 @@ class DockingManager(UIElement):
                 return None
 
             if zone.zone_type == DockZoneType.CONTAINER and zone.tab_group:
-                return zone.tab_group
+                # FIX: Check if the position is actually in the tab area
+                tab_area = pygame.Rect(zone.rect.x, zone.rect.y,
+                                       zone.rect.width, zone.tab_group.config.layout.tab_height)
+                if tab_area.collidepoint(pos):
+                    return zone.tab_group
             elif zone.zone_type == DockZoneType.SPLITTER:
                 for child_zone in zone.child_zones:
                     result = find_tab_group_at_pos(child_zone, pos)
@@ -1256,6 +1326,45 @@ class DockingManager(UIElement):
 
             if panel_id:
                 return self.remove_panel(panel_id)
+
+        return False
+
+    def _handle_close_tab_by_index(self, pos: Tuple[int, int], tab_index: int) -> bool:
+        """Handle closing a tab by finding the tab group at position and closing the specified index"""
+
+        def find_tab_group_with_index(zone: DockZone, pos: Tuple[int, int]) -> Optional[Tuple[TabGroup, int]]:
+            if not zone.rect.collidepoint(pos):
+                return None
+
+            if zone.zone_type == DockZoneType.CONTAINER and zone.tab_group:
+                # Check if click is in tab area
+                tab_height = zone.tab_group.config.layout.tab_height
+                tab_area = pygame.Rect(zone.rect.x, zone.rect.y, zone.rect.width, tab_height)
+                if tab_area.collidepoint(pos) and 0 <= tab_index < len(zone.tab_group.containers):
+                    return (zone.tab_group, tab_index)
+
+            elif zone.zone_type == DockZoneType.SPLITTER:
+                for child_zone in zone.child_zones:
+                    result = find_tab_group_with_index(child_zone, pos)
+                    if result:
+                        return result
+            return None
+
+        result = find_tab_group_with_index(self.root_zone, pos)
+        if result:
+            tab_group, index = result
+            if 0 <= index < len(tab_group.containers):
+                container = tab_group.containers[index]
+
+                # Find the panel ID
+                panel_id = None
+                for pid, cont in self.containers.items():
+                    if cont == container:
+                        panel_id = pid
+                        break
+
+                if panel_id and container.closable:
+                    return self.remove_panel(panel_id)
 
         return False
 
