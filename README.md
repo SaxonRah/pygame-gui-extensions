@@ -76,6 +76,13 @@ A powerful console for logging, command execution, and REPL functionality:
 ![Console Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ConsolePanel.png "Console Panel")
 
 ---
+# Examples:
+
+### **Skeletal Animation Example**
+A basic example showing off integration with Hierarchy, Property, and Timeline panels.
+![Skeletal Animation Example](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/Example_SkeletonAnimation.png "Skeletal Animation Example")
+
+---
 
 # Work in Progress:
 
