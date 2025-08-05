@@ -11,6 +11,8 @@ Well-built GUI widgets built on top of pygame-ce and pygame-gui for building too
 This extension is being built to facilitate [PySpine](https://github.com/SaxonRah/PySpine) and [StoryForge](https://github.com/SaxonRah/StoryForge). 
 
 ---
+---
+---
 
 # Completed Version 0.2 Panels
 
@@ -103,6 +105,9 @@ Organized tool selection:
 ![Tool Palette Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ToolPalettePanel.png "Tool Palette Panel")
 
 ---
+---
+---
+
 # Examples:
 
 ### **Skeletal Animation Example**
