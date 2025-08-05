@@ -62,6 +62,7 @@ class Tool:
     use_count: int = 0
     last_used: float = 0.0
     is_favorite: bool = False
+    is_loading: bool = False
     custom_data: Dict[str, Any] = field(default_factory=dict)
 
     def use_tool(self):
@@ -141,6 +142,7 @@ class ToolPaletteLayoutConfig:
     # Text and favorites
     favorite_star_size: int = 12
     favorite_star_offset: Tuple[int, int] = (4, 4)
+    loading_indicator_size: int = 16
 
 
 @dataclass
@@ -151,10 +153,13 @@ class ToolPaletteBehaviorConfig:
     show_tooltips: bool = True
     show_categories: bool = True
     show_favorites_section: bool = True
+    show_usage_stats: bool = False
     search_in_descriptions: bool = True
     group_by_category: bool = True
     track_usage_statistics: bool = True
     auto_expand_on_search: bool = True
+    animate_hover_effects: bool = True
+    show_loading_indicators: bool = True
 
 
 @dataclass
@@ -166,34 +171,78 @@ class ToolPaletteConfig:
 
 
 class ToolThemeManager:
-    """Theme manager following property panel pattern"""
+    """theme manager matching property panel capabilities"""
 
     def __init__(self, ui_manager: pygame_gui.UIManager, element_ids: List[str]):
         self.ui_manager = ui_manager
         self.element_ids = element_ids
         self.themed_colors = {}
         self.themed_font = None
-        self._update_theme_data()
+        self.update_theme_data()
 
-    def _update_theme_data(self):
-        """Update theme-dependent data with comprehensive fallbacks"""
+    def update_theme_data(self):
+        """Update theme-dependent data with comprehensive fallbacks matching property panel"""
+
+        # Comprehensive color mappings with tool-specific additions
         color_mappings = {
+            # Basic panel colors (matching property panel)
             'dark_bg': pygame.Color(45, 45, 45),
             'normal_text': pygame.Color(255, 255, 255),
             'secondary_text': pygame.Color(180, 180, 180),
+            'readonly_text': pygame.Color(150, 150, 150),
+
+            # Section/group colors (matching property panel)
             'section_bg': pygame.Color(35, 35, 35),
             'section_text': pygame.Color(200, 200, 200),
+
+            # Tool-specific colors (from basic control colors)
             'tool_bg': pygame.Color(60, 60, 60),
             'tool_text': pygame.Color(255, 255, 255),
             'tool_border': pygame.Color(100, 100, 100),
+
+            # State colors (matching property panel states)
             'focused_bg': pygame.Color(50, 80, 120),
             'focused_border': pygame.Color(120, 160, 255),
             'hovered_bg': pygame.Color(50, 50, 50),
             'selected_bg': pygame.Color(70, 130, 180),
+
+            # Tool-specific state colors
             'disabled_bg': pygame.Color(40, 40, 40),
             'disabled_text': pygame.Color(120, 120, 120),
+            'active_bg': pygame.Color(90, 150, 210),
+            'active_border': pygame.Color(140, 180, 255),
+            'loading_bg': pygame.Color(80, 60, 40),
+            'loading_text': pygame.Color(255, 200, 100),
+
+            # Status colors (matching property panel validation colors)
+            'error_bg': pygame.Color(60, 20, 20),
+            'error_text': pygame.Color(255, 100, 100),
+            'warning_bg': pygame.Color(80, 60, 20),
+            'warning_text': pygame.Color(255, 200, 100),
+            'success_bg': pygame.Color(20, 60, 20),
+            'success_text': pygame.Color(100, 255, 100),
+
+            # Tool-specific UI elements
             'favorite_star': pygame.Color(255, 215, 0),
+            'favorite_star_outline': pygame.Color(200, 150, 0),
+            'usage_indicator': pygame.Color(100, 200, 100),
+            'search_highlight': pygame.Color(255, 255, 0, 100),
+
+            # Borders and accents (matching property panel)
             'normal_border': pygame.Color(80, 80, 80),
+            'accent': pygame.Color(100, 200, 100),
+
+            # Toolbar specific colors
+            'toolbar_bg': pygame.Color(30, 30, 30),
+            'toolbar_button_bg': pygame.Color(50, 50, 50),
+            'toolbar_button_text': pygame.Color(255, 255, 255),
+            'toolbar_button_active': pygame.Color(70, 130, 180),
+
+            # Search specific colors
+            'search_bg': pygame.Color(40, 40, 40),
+            'search_text': pygame.Color(255, 255, 255),
+            'search_placeholder': pygame.Color(150, 150, 150),
+            'search_border': pygame.Color(100, 100, 100),
         }
 
         try:
@@ -204,27 +253,48 @@ class ToolThemeManager:
                 try:
                     if hasattr(theme, 'get_colour_or_gradient'):
                         color = theme.get_colour_or_gradient(color_id, self.element_ids)
-                        self.themed_colors[color_id] = color if color else default_color
+                        # Handle gradients properly - if it's a gradient, we might want to extract a solid color
+                        if color:
+                            if hasattr(color, 'colour_1'):  # It's a gradient
+                                # Use the first color of the gradient as fallback
+                                self.themed_colors[color_id] = color.colour_1
+                            else:
+                                self.themed_colors[color_id] = color
+                        else:
+                            self.themed_colors[color_id] = default_color
                     else:
                         self.themed_colors[color_id] = default_color
-                except Exception:
+                except Exception as e:
+                    if TOOL_DEBUG:
+                        print(f"Warning: Could not get themed color '{color_id}': {e}")
                     self.themed_colors[color_id] = default_color
 
-            # Get themed font
+            # Get themed font with comprehensive fallbacks
             try:
                 if hasattr(theme, 'get_font'):
-                    self.themed_font = theme.get_font(self.element_ids)
+                    font = theme.get_font(self.element_ids)
+                    if hasattr(font, 'get_font_size'):
+                        # It's a pygame_gui font interface
+                        self.themed_font = font
+                    else:
+                        # Fallback to pygame font
+                        raise Exception("No valid font interface")
                 else:
                     raise Exception("No font method")
-            except Exception:
+            except Exception as e:
+                if TOOL_DEBUG:
+                    print(f"Warning: Could not get themed font: {e}, using fallback")
                 try:
                     self.themed_font = pygame.font.SysFont('Arial', 12)
-                except:
+                except Exception as e2:
+                    if TOOL_DEBUG:
+                        print(f"Warning: Could not get system font: {e2}, using default")
                     self.themed_font = pygame.font.Font(None, 12)
 
         except Exception as e:
             if TOOL_DEBUG:
                 print(f"Error getting theme data: {e}")
+            # Complete fallback - use all default colors
             self.themed_colors = color_mappings
             try:
                 self.themed_font = pygame.font.SysFont('Arial', 12)
@@ -232,20 +302,37 @@ class ToolThemeManager:
                 self.themed_font = pygame.font.Font(None, 12)
 
     def rebuild_from_changed_theme_data(self):
-        """Called when theme data changes"""
-        self._update_theme_data()
+        """Called when theme data changes (matching property panel)"""
+        if TOOL_DEBUG:
+            print("Rebuilding tool palette theme data from changed theme")
+        self.update_theme_data()
 
     def get_color(self, color_id: str, fallback: pygame.Color = None) -> pygame.Color:
-        """Get a themed color with fallback"""
-        return self.themed_colors.get(color_id, fallback or pygame.Color(255, 255, 255))
+        """Get a themed color with fallback (matching property panel)"""
+        color = self.themed_colors.get(color_id, fallback or pygame.Color(255, 255, 255))
+        if TOOL_DEBUG and color_id not in self.themed_colors:
+            print(f"Warning: Color '{color_id}' not found in theme, using fallback")
+        return color
 
     def get_font(self):
-        """Get the themed font"""
+        """Get the themed font (matching property panel)"""
         return self.themed_font
+
+    def get_all_colors(self) -> Dict[str, pygame.Color]:
+        """Get all themed colors for debugging"""
+        return self.themed_colors.copy()
+
+    def apply_color_scheme(self, scheme_colors: Dict[str, pygame.Color]):
+        """Apply a color scheme override"""
+        for color_id, color in scheme_colors.items():
+            if color_id in self.themed_colors:
+                self.themed_colors[color_id] = color
+                if TOOL_DEBUG:
+                    print(f"Applied color scheme override: {color_id} = {color}")
 
 
 class ToolRenderer:
-    """Base tool renderer following property panel renderer pattern"""
+    """tool renderer with better state management"""
 
     def __init__(self, tool: Tool, config: ToolPaletteConfig):
         self.tool = tool
@@ -253,65 +340,153 @@ class ToolRenderer:
         self.is_selected = False
         self.is_focused = False
         self.is_hovered = False
+        self.is_pressed = False
         self.rect = pygame.Rect(0, 0, 0, 0)
+
+        # Animation state
+        self.hover_time = 0.0
+        self.press_time = 0.0
 
     def set_geometry(self, rect: pygame.Rect):
         """Set the geometry for this tool renderer"""
         self.rect = rect
 
+    def update(self, time_delta: float):
+        """Update renderer animations"""
+        if self.is_hovered and self.config.behavior.animate_hover_effects:
+            self.hover_time = min(1.0, self.hover_time + time_delta * 4)
+        else:
+            self.hover_time = max(0.0, self.hover_time - time_delta * 4)
+
+        if self.is_pressed:
+            self.press_time = min(1.0, self.press_time + time_delta * 8)
+        else:
+            self.press_time = max(0.0, self.press_time - time_delta * 8)
+
     def draw(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
-        """Draw the tool renderer"""
+        """Draw the tool renderer with theming"""
         self._draw_background(surface, theme_manager)
         self._draw_content(surface, theme_manager)
-        self._draw_favorite_indicator(surface, theme_manager)
+        self._draw_status_indicators(surface, theme_manager)
 
     def _draw_background(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
-        """Draw background highlighting"""
+        """Draw background with state handling"""
+        # Determine background color based on state priority
         if not self.tool.enabled:
             bg_color = theme_manager.get_color('disabled_bg')
+        elif self.tool.is_loading:
+            bg_color = theme_manager.get_color('loading_bg')
+        elif self.is_pressed:
+            bg_color = theme_manager.get_color('active_bg')
         elif self.is_selected:
             bg_color = theme_manager.get_color('selected_bg')
         elif self.is_hovered:
-            bg_color = theme_manager.get_color('hovered_bg')
+            # Animate hover background
+            base_color = theme_manager.get_color('tool_bg')
+            hover_color = theme_manager.get_color('hovered_bg')
+            if self.config.behavior.animate_hover_effects and self.hover_time > 0:
+                # Blend colors based on hover time
+                r = int(base_color.r + (hover_color.r - base_color.r) * self.hover_time)
+                g = int(base_color.g + (hover_color.g - base_color.g) * self.hover_time)
+                b = int(base_color.b + (hover_color.b - base_color.b) * self.hover_time)
+                bg_color = pygame.Color(r, g, b)
+            else:
+                bg_color = hover_color
         else:
             bg_color = theme_manager.get_color('tool_bg')
 
         pygame.draw.rect(surface, bg_color, self.rect,
                          border_radius=self.config.layout.corner_radius)
 
-        # Border
-        border_color = theme_manager.get_color('focused_border' if self.is_focused else 'tool_border')
+        # border handling
+        if self.is_focused:
+            border_color = theme_manager.get_color('focused_border')
+            border_width = self.config.layout.focus_border_width
+        elif self.is_pressed:
+            border_color = theme_manager.get_color('active_border')
+            border_width = self.config.layout.border_width
+        elif not self.tool.enabled:
+            border_color = theme_manager.get_color('disabled_text')
+            border_width = self.config.layout.border_width
+        else:
+            border_color = theme_manager.get_color('tool_border')
+            border_width = self.config.layout.border_width
+
         pygame.draw.rect(surface, border_color, self.rect,
-                         self.config.layout.border_width,
+                         border_width,
                          border_radius=self.config.layout.corner_radius)
 
     def _draw_content(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
         """Draw tool content - override in subclasses"""
         pass
 
-    def _draw_favorite_indicator(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
-        """Draw favorite star indicator"""
-        if self.tool.is_favorite and self.config.behavior.show_favorites_section:
-            star_color = theme_manager.get_color('favorite_star')
-            star_x = self.rect.right - self.config.layout.favorite_star_offset[0]
-            star_y = self.rect.y + self.config.layout.favorite_star_offset[1]
-            star_size = self.config.layout.favorite_star_size
+    def _draw_status_indicators(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
+        """Draw status indicators"""
+        layout = self.config.layout
+        behavior = self.config.behavior
 
-            # Simple star (circle for now)
-            pygame.draw.circle(surface, star_color, (star_x, star_y), star_size // 3)
+        # Favorite star indicator (enhanced)
+        if self.tool.is_favorite and behavior.show_favorites_section:
+            star_color = theme_manager.get_color('favorite_star')
+            outline_color = theme_manager.get_color('favorite_star_outline')
+            star_x = self.rect.right - layout.favorite_star_offset[0]
+            star_y = self.rect.y + layout.favorite_star_offset[1]
+            star_size = layout.favorite_star_size
+
+            # Draw star outline
+            pygame.draw.circle(surface, outline_color, (star_x, star_y), star_size // 2 + 1)
+            # Draw star fill
+            pygame.draw.circle(surface, star_color, (star_x, star_y), star_size // 2)
+
+        # Loading indicator
+        if self.tool.is_loading and behavior.show_loading_indicators:
+            loading_color = theme_manager.get_color('loading_text')
+            loading_x = self.rect.x + layout.control_padding
+            loading_y = self.rect.y + layout.control_padding
+            loading_size = layout.loading_indicator_size
+
+            # Simple loading indicator (could be animated)
+            pygame.draw.circle(surface, loading_color,
+                               (loading_x + loading_size // 2, loading_y + loading_size // 2),
+                               loading_size // 4)
+
+        # Usage statistics indicator
+        if behavior.show_usage_stats and self.tool.use_count > 0:
+            usage_color = theme_manager.get_color('usage_indicator')
+            usage_text = str(self.tool.use_count)
+
+            try:
+                font = theme_manager.get_font()
+                if hasattr(font, 'render_premul'):
+                    usage_surface = font.render_premul(usage_text, usage_color)
+                else:
+                    usage_surface = font.render(usage_text, True, usage_color)
+
+                usage_x = self.rect.x + layout.control_padding
+                usage_y = self.rect.bottom - layout.control_padding - usage_surface.get_height()
+                surface.blit(usage_surface, (usage_x, usage_y))
+            except Exception:
+                pass
 
     def handle_event(self, event: pygame.event.Event, relative_pos: Tuple[int, int]) -> bool:
-        """Handle input events"""
+        """Handle input events with state tracking"""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(relative_pos):
+                self.is_pressed = True
+                return True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.is_pressed = False
+
         return False
 
 
 class GridToolRenderer(ToolRenderer):
-    """Grid view tool renderer"""
+    """grid view tool renderer"""
 
     def _draw_content(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
         layout = self.config.layout
 
-        # Icon area
+        # Icon area with theming
         icon_size = layout.grid_icon_size
         icon_rect = pygame.Rect(
             self.rect.centerx - icon_size[0] // 2,
@@ -320,35 +495,57 @@ class GridToolRenderer(ToolRenderer):
             icon_size[1]
         )
 
-        # Draw icon placeholder
-        icon_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
-        pygame.draw.rect(surface, icon_color, icon_rect, 1)
+        # Determine icon color based on tool state
+        if not self.tool.enabled:
+            icon_color = theme_manager.get_color('disabled_text')
+        elif self.tool.is_loading:
+            icon_color = theme_manager.get_color('loading_text')
+        else:
+            icon_color = theme_manager.get_color('tool_text')
 
-        # Tool name
+        # Draw icon placeholder with styling
+        pygame.draw.rect(surface, icon_color, icon_rect, 2,
+                         border_radius=layout.corner_radius)
+
+        # Tool name with text rendering
         name_y = icon_rect.bottom + layout.grid_padding
-        text_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
+        text_color = icon_color  # Use same color as icon
 
         try:
             font = theme_manager.get_font()
+            text = self.tool.name
+
+            # Truncate text if too long for grid cell
+            max_width = self.rect.width - 2 * layout.grid_padding
+            if hasattr(font, 'size'):
+                text_width = font.size(text)[0]
+                if text_width > max_width:
+                    # Simple truncation - could be enhanced
+                    while text and font.size(text + "...")[0] > max_width:
+                        text = text[:-1]
+                    if text:
+                        text += "..."
+
             if hasattr(font, 'render_premul'):
-                text_surface = font.render_premul(self.tool.name, text_color)
+                text_surface = font.render_premul(text, text_color)
             else:
-                text_surface = font.render(self.tool.name, True, text_color)
+                text_surface = font.render(text, True, text_color)
 
             text_x = self.rect.x + (self.rect.width - text_surface.get_width()) // 2
             text_y = name_y + (self.rect.bottom - name_y - text_surface.get_height()) // 2
             surface.blit(text_surface, (text_x, text_y))
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering grid tool text: {e}")
 
 
 class ListToolRenderer(ToolRenderer):
-    """List view tool renderer"""
+    """list view tool renderer"""
 
     def _draw_content(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
         layout = self.config.layout
 
-        # Icon
+        # Icon with theming
         icon_size = layout.list_icon_size
         icon_rect = pygame.Rect(
             self.rect.x + layout.list_text_padding,
@@ -357,13 +554,23 @@ class ListToolRenderer(ToolRenderer):
             icon_size
         )
 
+        # Determine colors based on tool state
+        if not self.tool.enabled:
+            icon_color = theme_manager.get_color('disabled_text')
+            text_color = theme_manager.get_color('disabled_text')
+        elif self.tool.is_loading:
+            icon_color = theme_manager.get_color('loading_text')
+            text_color = theme_manager.get_color('loading_text')
+        else:
+            icon_color = theme_manager.get_color('tool_text')
+            text_color = theme_manager.get_color('tool_text')
+
         # Draw icon placeholder
-        icon_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
-        pygame.draw.rect(surface, icon_color, icon_rect, 1)
+        pygame.draw.rect(surface, icon_color, icon_rect, 1,
+                         border_radius=layout.corner_radius)
 
         # Tool name
         name_x = icon_rect.right + layout.list_text_padding
-        text_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
 
         try:
             font = theme_manager.get_font()
@@ -375,7 +582,7 @@ class ListToolRenderer(ToolRenderer):
             text_y = self.rect.y + (self.rect.height - text_surface.get_height()) // 2
             surface.blit(text_surface, (name_x, text_y))
 
-            # Shortcut (right aligned)
+            # shortcut display
             if self.tool.shortcut and self.config.behavior.show_shortcuts:
                 shortcut_color = theme_manager.get_color('secondary_text')
                 if hasattr(font, 'render_premul'):
@@ -384,18 +591,23 @@ class ListToolRenderer(ToolRenderer):
                     shortcut_surface = font.render(self.tool.shortcut, True, shortcut_color)
 
                 shortcut_x = self.rect.right - layout.list_text_padding - shortcut_surface.get_width()
+                # Account for favorite star
+                if self.tool.is_favorite:
+                    shortcut_x -= layout.favorite_star_size + layout.control_padding
+
                 surface.blit(shortcut_surface, (shortcut_x, text_y))
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering list tool text: {e}")
 
 
 class DetailToolRenderer(ToolRenderer):
-    """Detail view tool renderer"""
+    """detail view tool renderer"""
 
     def _draw_content(self, surface: pygame.Surface, theme_manager: ToolThemeManager):
         layout = self.config.layout
 
-        # Icon
+        # Icon with theming
         icon_size = layout.detail_icon_size
         icon_rect = pygame.Rect(
             self.rect.x + layout.list_text_padding,
@@ -404,13 +616,26 @@ class DetailToolRenderer(ToolRenderer):
             icon_size
         )
 
+        # Determine colors based on tool state
+        if not self.tool.enabled:
+            icon_color = theme_manager.get_color('disabled_text')
+            text_color = theme_manager.get_color('disabled_text')
+            desc_color = theme_manager.get_color('disabled_text')
+        elif self.tool.is_loading:
+            icon_color = theme_manager.get_color('loading_text')
+            text_color = theme_manager.get_color('loading_text')
+            desc_color = theme_manager.get_color('secondary_text')
+        else:
+            icon_color = theme_manager.get_color('tool_text')
+            text_color = theme_manager.get_color('tool_text')
+            desc_color = theme_manager.get_color('secondary_text')
+
         # Draw icon placeholder
-        icon_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
-        pygame.draw.rect(surface, icon_color, icon_rect, 1)
+        pygame.draw.rect(surface, icon_color, icon_rect, 2,
+                         border_radius=layout.corner_radius)
 
         # Text area
         text_x = icon_rect.right + layout.list_text_padding
-        text_color = theme_manager.get_color('tool_text' if self.tool.enabled else 'disabled_text')
 
         try:
             font = theme_manager.get_font()
@@ -424,16 +649,20 @@ class DetailToolRenderer(ToolRenderer):
             name_y = self.rect.y + layout.list_text_padding
             surface.blit(name_surface, (text_x, name_y))
 
-            # Tool description
+            # tool description
             if self.tool.description and self.config.behavior.show_descriptions:
-                desc_color = theme_manager.get_color('secondary_text')
                 desc_y = name_y + name_surface.get_height() + 2
 
-                # Truncate description if too long
-                max_desc_length = 60
-                display_desc = self.tool.description[:max_desc_length]
-                if len(self.tool.description) > max_desc_length:
-                    display_desc += "..."
+                # Smart text wrapping and truncation
+                max_desc_width = self.rect.right - text_x - layout.list_text_padding
+                if self.tool.is_favorite:
+                    max_desc_width -= layout.favorite_star_size + layout.control_padding
+
+                display_desc = self.tool.description
+                max_desc_length = 80  # Increased for detail view
+
+                if len(display_desc) > max_desc_length:
+                    display_desc = display_desc[:max_desc_length] + "..."
 
                 if hasattr(font, 'render_premul'):
                     desc_surface = font.render_premul(display_desc, desc_color)
@@ -442,7 +671,7 @@ class DetailToolRenderer(ToolRenderer):
 
                 surface.blit(desc_surface, (text_x, desc_y))
 
-            # Shortcut (bottom right)
+            # shortcut display
             if self.tool.shortcut and self.config.behavior.show_shortcuts:
                 shortcut_color = theme_manager.get_color('secondary_text')
                 if hasattr(font, 'render_premul'):
@@ -452,13 +681,19 @@ class DetailToolRenderer(ToolRenderer):
 
                 shortcut_x = self.rect.right - layout.list_text_padding - shortcut_surface.get_width()
                 shortcut_y = self.rect.bottom - layout.list_text_padding - shortcut_surface.get_height()
+
+                # Account for favorite star
+                if self.tool.is_favorite:
+                    shortcut_x -= layout.favorite_star_size + layout.control_padding
+
                 surface.blit(shortcut_surface, (shortcut_x, shortcut_y))
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering detail tool text: {e}")
 
 
 class ToolPalettePanel(UIElement):
-    """Main tool palette panel widget following property panel architecture"""
+    """tool palette panel with comprehensive theming"""
 
     def __init__(self, relative_rect: pygame.Rect,
                  manager: pygame_gui.UIManager,
@@ -529,6 +764,64 @@ class ToolPalettePanel(UIElement):
         self.rebuild_ui()
         self.rebuild_image()
 
+    def _needs_rebuild(self) -> bool:
+        """Check if UI needs rebuilding (following property panel pattern)"""
+        current_state = {
+            'scroll_y': self.scroll_y,
+            'rect_size': (self.rect.width, self.rect.height),
+            'group_states': {g.id: g.expanded for g in self.tool_groups.values()},
+            'focused_tool': self.focused_tool,
+            'selected_tool': self.selected_tool,
+            'tool_count': len(self.tools),
+            'view_mode': self.view_mode,
+            'search_query': self.search_query,
+            'grid_item_width': self.config.layout.grid_item_width,
+            'grid_item_height': self.config.layout.grid_item_height,
+            'list_item_height': self.config.layout.list_item_height,
+        }
+
+        if current_state != self._last_rebuild_state:
+            self._last_rebuild_state = current_state
+            return True
+
+        return False
+
+    def rebuild_from_changed_theme_data(self):
+        """Called when theme data changes (matching property panel)"""
+        if TOOL_DEBUG:
+            print("Rebuilding tool palette from changed theme data")
+        self.theme_manager.rebuild_from_changed_theme_data()
+        self.rebuild_ui()
+        self.rebuild_image()
+
+    def update_layout_config(self, layout_config: ToolPaletteLayoutConfig):
+        """Update layout configuration and rebuild (matching property panel)"""
+        self.config.layout = copy.deepcopy(layout_config)
+        self._last_rebuild_state = None
+        self.rebuild_ui()
+        self.rebuild_image()
+        if TOOL_DEBUG:
+            print(
+                f"Layout updated - grid item size: {self.config.layout.grid_item_width}x{self.config.layout.grid_item_height}")
+
+    def update_behavior_config(self, behavior_config: ToolPaletteBehaviorConfig):
+        """Update behavior configuration (matching property panel)"""
+        self.config.behavior = copy.deepcopy(behavior_config)
+        self._last_rebuild_state = None
+        self.rebuild_ui()
+        self.rebuild_image()
+        if TOOL_DEBUG:
+            print(f"Behavior updated - show descriptions: {self.config.behavior.show_descriptions}")
+
+    def apply_color_scheme(self, scheme_colors: Dict[str, pygame.Color]):
+        """Apply a color scheme to the theme manager"""
+        self.theme_manager.apply_color_scheme(scheme_colors)
+        self.rebuild_image()
+
+    def draw(self, surface: pygame.Surface):
+        """Draw the panel image to the screen."""
+        surface.blit(self.image, self.rect)
+
     def debug_print_complete_state(self):
         """Print complete debug information"""
         print(f"\n=== COMPLETE DEBUG STATE ===")
@@ -558,31 +851,201 @@ class ToolPalettePanel(UIElement):
         for group_id, rect in self.group_rects.items():
             print(f"  {group_id}: {rect}")
 
-    def _needs_rebuild(self) -> bool:
-        """Check if UI needs rebuilding (following property panel pattern)"""
-        current_state = {
-            'scroll_y': self.scroll_y,
-            'rect_size': (self.rect.width, self.rect.height),
-            'group_states': {g.id: g.expanded for g in self.tool_groups.values()},
-            'focused_tool': self.focused_tool,
-            'selected_tool': self.selected_tool,
-            'tool_count': len(self.tools),
-            'view_mode': self.view_mode,
+    def get_tool_by_id(self, tool_id: str) -> Optional[Tool]:
+        """Get a tool by its ID"""
+        return self.tools.get(tool_id)
+
+    def get_group_by_id(self, group_id: str) -> Optional[ToolGroup]:
+        """Get a group by its ID"""
+        return self.tool_groups.get(group_id)
+
+    def get_tools_by_type(self, tool_type: ToolType) -> List[Tool]:
+        """Get all tools of a specific type"""
+        return [tool for tool in self.tools.values() if tool.tool_type == tool_type]
+
+    def get_favorite_tools(self) -> List[Tool]:
+        """Get all favorite tools"""
+        return [tool for tool in self.tools.values() if tool.is_favorite]
+
+    def clear_all_tools(self):
+        """Clear all tools and groups"""
+        self.tools.clear()
+        self.tool_groups.clear()
+        self.favorites.clear()
+        self.visible_tools.clear()
+        self.visible_groups.clear()
+        self.renderers.clear()
+        self.group_rects.clear()
+        self.selected_tool = None
+        self.focused_tool = None
+        self.rebuild_ui()
+        self.rebuild_image()
+
+    def expand_all_groups(self):
+        """Expand all groups"""
+        changed = False
+        for group in self.tool_groups.values():
+            if not group.expanded:
+                group.expanded = True
+                changed = True
+
+        if changed:
+            self.rebuild_ui()
+            self.rebuild_image()
+
+    def collapse_all_groups(self):
+        """Collapse all groups"""
+        changed = False
+        for group in self.tool_groups.values():
+            if group.expanded:
+                group.expanded = False
+                changed = True
+
+        if changed:
+            self.rebuild_ui()
+            self.rebuild_image()
+
+    def set_tool_enabled(self, tool_id: str, enabled: bool):
+        """Enable or disable a tool"""
+        if tool_id in self.tools:
+            self.tools[tool_id].enabled = enabled
+            self.rebuild_image()
+
+    def set_tool_loading(self, tool_id: str, loading: bool):
+        """Set a tool's loading state"""
+        if tool_id in self.tools:
+            self.tools[tool_id].is_loading = loading
+            self.rebuild_image()
+
+    def get_usage_statistics(self) -> Dict[str, int]:
+        """Get usage statistics for all tools"""
+        return {tool_id: tool.use_count for tool_id, tool in self.tools.items()}
+
+    def sort_tools_by_usage(self, group_id: Optional[str] = None):
+        """Sort tools by usage count"""
+        if group_id and group_id in self.tool_groups:
+            # Sort tools in specific group
+            group = self.tool_groups[group_id]
+            group.tools.sort(key=lambda t: t.use_count, reverse=True)
+        else:
+            # Sort tools in all groups
+            for group in self.tool_groups.values():
+                group.tools.sort(key=lambda t: t.use_count, reverse=True)
+
+        self.rebuild_ui()
+        self.rebuild_image()
+
+    def filter_tools_by_enabled(self, enabled_only: bool = True):
+        """Filter to show only enabled or disabled tools"""
+        # This would require adding a filter state to the class
+        # For now, we'll modify the _should_show_tool method
+        pass
+
+    def export_tool_configuration(self) -> Dict[str, Any]:
+        """Export current tool configuration"""
+        config_data = {
+            'groups': [],
+            'view_mode': self.view_mode.value,
             'search_query': self.search_query,
-            'grid_item_width': self.config.layout.grid_item_width,
-            'grid_item_height': self.config.layout.grid_item_height,
-            'list_item_height': self.config.layout.list_item_height,
+            'layout_config': {
+                'grid_item_width': self.config.layout.grid_item_width,
+                'grid_item_height': self.config.layout.grid_item_height,
+                'list_item_height': self.config.layout.list_item_height,
+            },
+            'behavior_config': {
+                'show_descriptions': self.config.behavior.show_descriptions,
+                'show_shortcuts': self.config.behavior.show_shortcuts,
+                'show_favorites_section': self.config.behavior.show_favorites_section,
+            }
         }
 
-        if current_state != self._last_rebuild_state:
-            self._last_rebuild_state = current_state
-            return True
+        for group in self.tool_groups.values():
+            group_data = {
+                'id': group.id,
+                'name': group.name,
+                'description': group.description,
+                'expanded': group.expanded,
+                'order': group.order,
+                'tools': []
+            }
 
-        return False
+            for tool in group.tools:
+                tool_data = {
+                    'id': tool.id,
+                    'name': tool.name,
+                    'description': tool.description,
+                    'tool_type': tool.tool_type.value,
+                    'category': tool.category,
+                    'shortcut': tool.shortcut,
+                    'enabled': tool.enabled,
+                    'visible': tool.visible,
+                    'is_favorite': tool.is_favorite,
+                    'use_count': tool.use_count,
+                }
+                group_data['tools'].append(tool_data)
 
-    def rebuild_from_changed_theme_data(self):
-        """Called when theme data changes"""
-        self.theme_manager.rebuild_from_changed_theme_data()
+            config_data['groups'].append(group_data)
+
+        return config_data
+
+    def import_tool_configuration(self, config_data: Dict[str, Any]):
+        """Import tool configuration"""
+        # Clear existing tools
+        self.clear_all_tools()
+
+        # Import layout config
+        if 'layout_config' in config_data:
+            layout_data = config_data['layout_config']
+            self.config.layout.grid_item_width = layout_data.get('grid_item_width', 120)
+            self.config.layout.grid_item_height = layout_data.get('grid_item_height', 100)
+            self.config.layout.list_item_height = layout_data.get('list_item_height', 28)
+
+        # Import behavior config
+        if 'behavior_config' in config_data:
+            behavior_data = config_data['behavior_config']
+            self.config.behavior.show_descriptions = behavior_data.get('show_descriptions', True)
+            self.config.behavior.show_shortcuts = behavior_data.get('show_shortcuts', True)
+            self.config.behavior.show_favorites_section = behavior_data.get('show_favorites_section', True)
+
+        # Import groups and tools
+        for group_data in config_data.get('groups', []):
+            group = ToolGroup(
+                id=group_data['id'],
+                name=group_data['name'],
+                description=group_data.get('description', ''),
+                expanded=group_data.get('expanded', True),
+                order=group_data.get('order', 0)
+            )
+
+            for tool_data in group_data.get('tools', []):
+                tool = Tool(
+                    id=tool_data['id'],
+                    name=tool_data['name'],
+                    description=tool_data.get('description', ''),
+                    tool_type=ToolType(tool_data.get('tool_type', 'utility')),
+                    category=tool_data.get('category', 'General'),
+                    shortcut=tool_data.get('shortcut', ''),
+                    enabled=tool_data.get('enabled', True),
+                    visible=tool_data.get('visible', True),
+                    is_favorite=tool_data.get('is_favorite', False),
+                    use_count=tool_data.get('use_count', 0),
+                )
+                group.add_tool(tool)
+
+            self.add_group(group)
+
+        # Set view mode and search
+        if 'view_mode' in config_data:
+            try:
+                self.set_view_mode(ToolViewMode(config_data['view_mode']))
+            except ValueError:
+                pass  # Invalid view mode, keep current
+
+        if 'search_query' in config_data:
+            self.set_search_query(config_data['search_query'])
+
+    def refresh(self):
+        """Refresh the tool palette display"""
         self.rebuild_ui()
         self.rebuild_image()
 
@@ -615,10 +1078,6 @@ class ToolPalettePanel(UIElement):
             print(f"UI rebuilt: {len(self.visible_tools)} visible tools, "
                   f"content_height: {self.content_height}, max_scroll: {self.max_scroll}")
 
-    def draw(self, surface: pygame.Surface):
-        """Draw the panel image to the screen."""
-        surface.blit(self.image, self.rect)
-
     def _update_visible_items(self):
         """Update visible groups and tools based on search and filters"""
         self.visible_groups = []
@@ -626,11 +1085,6 @@ class ToolPalettePanel(UIElement):
 
         # Get all groups sorted by order
         all_groups = sorted(self.tool_groups.values(), key=lambda g: g.order)
-
-        if TOOL_DEBUG:
-            print(f"Updating visible items. Total groups: {len(all_groups)}")
-            for group in all_groups:
-                print(f"  Group {group.name}: {len(group.tools)} tools")
 
         for group in all_groups:
             group_tools = []
@@ -640,9 +1094,6 @@ class ToolPalettePanel(UIElement):
                 if self._should_show_tool(tool):
                     group_tools.append(tool)
 
-            if TOOL_DEBUG:
-                print(f"  Group {group.name} visible tools: {[t.name for t in group_tools]}")
-
             # Only show group if it has visible tools or no search is active
             if group_tools or not self.search_query:
                 self.visible_groups.append(group)
@@ -650,14 +1101,6 @@ class ToolPalettePanel(UIElement):
                 # Only add tools to visible_tools if group is expanded
                 if group.expanded:
                     self.visible_tools.extend(group_tools)
-                    if TOOL_DEBUG:
-                        print(f"    Added {len(group_tools)} tools to visible_tools (group expanded)")
-                else:
-                    if TOOL_DEBUG:
-                        print(f"    Group collapsed, not adding tools to visible_tools")
-
-        if TOOL_DEBUG:
-            print(f"Final visible_tools: {[t.name for t in self.visible_tools]}")
 
     def _should_show_tool(self, tool: Tool) -> bool:
         """Check if tool should be visible based on filters"""
@@ -693,9 +1136,9 @@ class ToolPalettePanel(UIElement):
 
     def _create_renderers(self):
         """Create tool renderers based on view mode"""
-        self.renderers.clear()  # <- ensure full clear
+        self.renderers.clear()
 
-        for tool in self.visible_tools:  # <- only visible tools
+        for tool in self.visible_tools:
             if self.view_mode == ToolViewMode.GRID:
                 renderer = GridToolRenderer(tool, self.config)
             elif self.view_mode == ToolViewMode.LIST:
@@ -727,7 +1170,6 @@ class ToolPalettePanel(UIElement):
 
                 # Tools in group (only if expanded)
                 if group.expanded:
-                    # Use group.tools directly and filter by visibility, not by visible_tools
                     group_tools = [tool for tool in group.tools if self._should_show_tool(tool)]
 
                     # Layout tools in grid within this group
@@ -761,7 +1203,6 @@ class ToolPalettePanel(UIElement):
                     current_y += layout.group_header_height
 
                 if group.expanded:
-                    # Use group.tools directly and filter by visibility
                     group_tools = [tool for tool in group.tools if self._should_show_tool(tool)]
 
                     for tool in group_tools:
@@ -775,7 +1216,7 @@ class ToolPalettePanel(UIElement):
         self.max_scroll = max(0, self.content_height - self.content_rect.height)
 
     def rebuild_image(self):
-        """Rebuild the image surface (following property panel pattern)"""
+        """Rebuild the image surface with enhanced theming"""
         # Fill background
         bg_color = self.theme_manager.get_color('dark_bg')
         self.image.fill(bg_color)
@@ -797,7 +1238,7 @@ class ToolPalettePanel(UIElement):
                              self.config.layout.focus_border_width)
 
     def _draw_toolbar(self):
-        """Draw the toolbar"""
+        """Draw the enhanced toolbar"""
         if self.toolbar_rect.height <= 0:
             return
 
@@ -806,11 +1247,11 @@ class ToolPalettePanel(UIElement):
         except (ValueError, pygame.error):
             return
 
-        # Background
-        bg_color = self.theme_manager.get_color('section_bg')
+        # Background with enhanced theming
+        bg_color = self.theme_manager.get_color('toolbar_bg')
         toolbar_surface.fill(bg_color)
 
-        # View mode buttons
+        # View mode buttons with enhanced styling
         layout = self.config.layout
         button_size = layout.toolbar_button_size
         button_y = (self.toolbar_rect.height - button_size) // 2
@@ -831,11 +1272,17 @@ class ToolPalettePanel(UIElement):
         self._draw_toolbar_button(toolbar_surface, detail_rect, "D", self.view_mode == ToolViewMode.DETAIL)
 
     def _draw_toolbar_button(self, surface: pygame.Surface, rect: pygame.Rect, text: str, active: bool):
-        """Draw a toolbar button"""
-        bg_color = self.theme_manager.get_color('selected_bg' if active else 'tool_bg')
+        """Draw enhanced toolbar button"""
+        if active:
+            bg_color = self.theme_manager.get_color('toolbar_button_active')
+            text_color = self.theme_manager.get_color('normal_text')
+        else:
+            bg_color = self.theme_manager.get_color('toolbar_button_bg')
+            text_color = self.theme_manager.get_color('toolbar_button_text')
+
         pygame.draw.rect(surface, bg_color, rect, border_radius=self.config.layout.corner_radius)
 
-        # Border
+        # Enhanced border
         border_color = self.theme_manager.get_color('tool_border')
         pygame.draw.rect(surface, border_color, rect, self.config.layout.border_width,
                          border_radius=self.config.layout.corner_radius)
@@ -843,8 +1290,6 @@ class ToolPalettePanel(UIElement):
         # Text
         try:
             font = self.theme_manager.get_font()
-            text_color = self.theme_manager.get_color('normal_text')
-
             if hasattr(font, 'render_premul'):
                 text_surface = font.render_premul(text, text_color)
             else:
@@ -852,11 +1297,12 @@ class ToolPalettePanel(UIElement):
 
             text_rect = text_surface.get_rect(center=rect.center)
             surface.blit(text_surface, text_rect)
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering toolbar button text: {e}")
 
     def _draw_search_bar(self):
-        """Draw the search bar"""
+        """Draw the enhanced search bar"""
         if self.search_rect.height <= 0:
             return
 
@@ -865,7 +1311,7 @@ class ToolPalettePanel(UIElement):
         except (ValueError, pygame.error):
             return
 
-        # Background
+        # Background with enhanced theming
         bg_color = self.theme_manager.get_color('section_bg')
         search_surface.fill(bg_color)
 
@@ -878,20 +1324,24 @@ class ToolPalettePanel(UIElement):
             self.search_rect.height - 2 * layout.control_padding
         )
 
-        # Input background
-        input_bg_color = self.theme_manager.get_color('tool_bg')
+        # Input background with enhanced theming
+        input_bg_color = self.theme_manager.get_color('search_bg')
         pygame.draw.rect(search_surface, input_bg_color, input_rect,
                          border_radius=self.config.layout.corner_radius)
 
-        # Input border
-        border_color = self.theme_manager.get_color('tool_border')
+        # Enhanced input border
+        border_color = self.theme_manager.get_color('search_border')
         pygame.draw.rect(search_surface, border_color, input_rect,
                          self.config.layout.border_width,
                          border_radius=self.config.layout.corner_radius)
 
-        # Search text
-        display_text = self.search_query if self.search_query else "Search tools..."
-        text_color = self.theme_manager.get_color('normal_text' if self.search_query else 'secondary_text')
+        # Enhanced search text
+        if self.search_query:
+            display_text = self.search_query
+            text_color = self.theme_manager.get_color('search_text')
+        else:
+            display_text = "Search tools..."
+            text_color = self.theme_manager.get_color('search_placeholder')
 
         try:
             font = self.theme_manager.get_font()
@@ -908,11 +1358,12 @@ class ToolPalettePanel(UIElement):
             )
 
             search_surface.blit(text_surface, text_rect)
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering search text: {e}")
 
     def _draw_content(self):
-        """Draw the content area - SAFE version that doesn't modify stored rects"""
+        """Draw the content area with enhanced clipping"""
         if self.content_rect.height <= 0:
             return
 
@@ -929,7 +1380,6 @@ class ToolPalettePanel(UIElement):
         for group_id, group in self.tool_groups.items():
             if group_id in self.group_rects:
                 stored_rect = self.group_rects[group_id]
-                # Create display rect WITHOUT modifying stored rect
                 display_rect = pygame.Rect(
                     stored_rect.x,
                     stored_rect.y - self.scroll_y,
@@ -943,7 +1393,6 @@ class ToolPalettePanel(UIElement):
 
         # Draw tools
         for tool_id, renderer in self.renderers.items():
-            # Create display rect WITHOUT modifying stored rect
             display_rect = pygame.Rect(
                 renderer.rect.x,
                 renderer.rect.y - self.scroll_y,
@@ -953,12 +1402,10 @@ class ToolPalettePanel(UIElement):
 
             # Only draw if visible
             if display_rect.bottom >= 0 and display_rect.y < content_surface.get_height():
-                # Draw tool safely without modifying renderer.rect
                 self._draw_tool_at_position(content_surface, renderer, display_rect)
 
     def _draw_tool_at_position(self, surface: pygame.Surface, renderer: ToolRenderer, display_rect: pygame.Rect):
         """Draw a tool at a specific display position without modifying the renderer's stored rect"""
-        # Check if tool is visible at all
         if display_rect.bottom < 0 or display_rect.y >= surface.get_height():
             return
 
@@ -971,12 +1418,11 @@ class ToolPalettePanel(UIElement):
                 tool_surface = surface.subsurface(visible_rect)
 
                 # Create a temporary renderer with the display position
-                # Save original state
                 original_rect = renderer.rect
 
                 # Set temporary rect for drawing (relative to the subsurface)
                 renderer.rect = pygame.Rect(
-                    display_rect.x - visible_rect.x,  # Offset within subsurface
+                    display_rect.x - visible_rect.x,
                     display_rect.y - visible_rect.y,
                     display_rect.width,
                     display_rect.height
@@ -999,7 +1445,7 @@ class ToolPalettePanel(UIElement):
                 renderer.rect = original_rect
 
     def _draw_group_header(self, surface: pygame.Surface, group: ToolGroup, rect: pygame.Rect):
-        """Draw group header (following property panel section header pattern)"""
+        """Draw enhanced group header"""
         if rect.bottom < 0 or rect.y >= surface.get_height():
             return
 
@@ -1007,7 +1453,7 @@ class ToolPalettePanel(UIElement):
         if visible_rect.width <= 0 or visible_rect.height <= 0:
             return
 
-        # Background
+        # Enhanced background
         section_bg = self.theme_manager.get_color('section_bg')
         try:
             section_surface = surface.subsurface(visible_rect)
@@ -1020,10 +1466,10 @@ class ToolPalettePanel(UIElement):
             self._draw_group_header_content(surface, group, rect)
 
     def _draw_group_header_content(self, surface: pygame.Surface, group: ToolGroup, rect: pygame.Rect):
-        """Draw group header content (following property panel pattern)"""
+        """Draw enhanced group header content"""
         layout = self.config.layout
 
-        # Expand/collapse triangle (same as property panel)
+        # Enhanced expand/collapse triangle
         triangle_x = 8
         triangle_y = rect.y + rect.height // 2
         triangle_color = self.theme_manager.get_color('section_text')
@@ -1046,64 +1492,29 @@ class ToolPalettePanel(UIElement):
 
         pygame.draw.polygon(surface, triangle_color, points)
 
-        # Group name
+        # Enhanced group name
         text_x = triangle_x + triangle_size * 3 + layout.group_text_padding
         text_color = self.theme_manager.get_color('section_text')
 
         try:
             font = self.theme_manager.get_font()
+            group_text = f"{group.name} ({len([t for t in group.tools if self._should_show_tool(t)])})"
+
             if hasattr(font, 'render_premul'):
-                text_surface = font.render_premul(group.name, text_color)
+                text_surface = font.render_premul(group_text, text_color)
             else:
-                text_surface = font.render(group.name, True, text_color)
+                text_surface = font.render(group_text, True, text_color)
 
             text_y = rect.y + (rect.height - text_surface.get_height()) // 2
             surface.blit(text_surface, (text_x, text_y))
-        except Exception:
-            pass
+        except Exception as e:
+            if TOOL_DEBUG:
+                print(f"Error rendering group header: {e}")
 
-    def _draw_tool_clipped(self, surface: pygame.Surface, renderer: ToolRenderer):
-        """Draw a tool with proper clipping - SIMPLIFIED"""
-        tool_rect = renderer.rect
-
-        # Check if tool is visible at all
-        if tool_rect.bottom < 0 or tool_rect.y >= surface.get_height():
-            return
-
-        # Calculate visible portion
-        visible_rect = tool_rect.clip(pygame.Rect(0, 0, surface.get_width(), surface.get_height()))
-
-        if visible_rect.width > 0 and visible_rect.height > 0:
-            try:
-                # Create subsurface for the visible portion
-                tool_surface = surface.subsurface(visible_rect)
-
-                # Adjust renderer rect to draw within the subsurface
-                draw_rect = pygame.Rect(
-                    visible_rect.x - tool_rect.x,  # Offset within the tool
-                    visible_rect.y - tool_rect.y,
-                    visible_rect.width,
-                    visible_rect.height
-                )
-
-                # Temporarily adjust renderer geometry
-                old_rect = renderer.rect
-                renderer.rect = pygame.Rect(0, 0, tool_rect.width, tool_rect.height)
-
-                # Draw the tool
-                renderer.draw(tool_surface, self.theme_manager)
-
-                # Restore geometry
-                renderer.rect = old_rect
-
-            except (ValueError, pygame.error) as e:
-                if TOOL_DEBUG:
-                    print(f"Error drawing tool {renderer.tool.id}: {e}")
-                # Fallback: draw directly on surface
-                renderer.draw(surface, self.theme_manager)
+    # ... [include all the remaining methods from the original class but with enhanced error handling]
 
     def process_event(self, event: pygame.event.Event) -> bool:
-        """Process pygame events (following property panel pattern)"""
+        """Process pygame events with enhanced handling"""
         consumed = False
 
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1133,7 +1544,7 @@ class ToolPalettePanel(UIElement):
         return consumed
 
     def _handle_left_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle left mouse click (following property panel pattern)"""
+        """Handle left mouse click with enhanced logic"""
         current_time = time.time() * 1000
 
         # Check toolbar clicks
@@ -1156,7 +1567,7 @@ class ToolPalettePanel(UIElement):
                 self.rebuild_ui(force=True)
                 self.rebuild_image()
 
-                # Send event
+                # Send enhanced event
                 event_type = UI_TOOL_GROUP_EXPANDED if group.expanded else UI_TOOL_GROUP_COLLAPSED
                 event_data = {'ui_element': self, 'group_id': group_id, 'group': group}
                 pygame.event.post(pygame.event.Event(event_type, event_data))
@@ -1165,7 +1576,7 @@ class ToolPalettePanel(UIElement):
             # Check tool clicks
             tool_id = self._get_tool_at_position(pos)
             if tool_id:
-                # Check for double click
+                # Enhanced double click detection
                 is_double_click = (tool_id == self.last_clicked_tool and
                                    current_time - self.last_click_time < 500)
 
@@ -1178,13 +1589,15 @@ class ToolPalettePanel(UIElement):
                     event_data = {'ui_element': self, 'tool_id': tool_id, 'tool': tool}
                     pygame.event.post(pygame.event.Event(UI_TOOL_DOUBLE_CLICKED, event_data))
 
-                    # Execute tool callback
+                    # Execute tool callback with enhanced error handling
                     if tool and tool.callback and tool.enabled:
                         try:
+                            if TOOL_DEBUG:
+                                print(f"Executing tool: {tool.name}")
                             tool.callback()
                         except Exception as e:
                             if TOOL_DEBUG:
-                                print(f"Error executing tool callback: {e}")
+                                print(f"Error executing tool callback for {tool.name}: {e}")
                 else:
                     # Single click - select tool
                     self.select_tool(tool_id)
@@ -1194,18 +1607,24 @@ class ToolPalettePanel(UIElement):
         return False
 
     def _handle_right_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle right mouse click"""
+        """Handle right mouse click with enhanced context"""
         if self.content_rect.collidepoint(pos):
             tool_id = self._get_tool_at_position(pos)
             if tool_id:
                 tool = self.tools.get(tool_id)
-                event_data = {'ui_element': self, 'tool_id': tool_id, 'tool': tool, 'mouse_pos': pos}
+                event_data = {
+                    'ui_element': self,
+                    'tool_id': tool_id,
+                    'tool': tool,
+                    'mouse_pos': pos,
+                    'can_favorite': tool.enabled if tool else False
+                }
                 pygame.event.post(pygame.event.Event(UI_TOOL_RIGHT_CLICKED, event_data))
                 return True
         return False
 
     def _handle_mouse_motion(self, pos: Tuple[int, int]) -> bool:
-        """Handle mouse motion / coordinate handling"""
+        """Handle mouse motion with enhanced hover effects"""
         tool_id = self._get_tool_at_position(pos) if self.content_rect.collidepoint(pos) else None
 
         hover_changed = False
@@ -1221,9 +1640,10 @@ class ToolPalettePanel(UIElement):
         return hover_changed
 
     def _handle_scroll(self, delta: int) -> bool:
-        """Handle scroll wheel"""
+        """Handle scroll wheel with enhanced scrolling"""
+        scroll_speed = self.config.layout.grid_padding * 3  # Enhanced scroll speed
         old_scroll = self.scroll_y
-        self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - delta * 20))
+        self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - delta * scroll_speed))
 
         if old_scroll != self.scroll_y:
             self.rebuild_ui()
@@ -1233,12 +1653,12 @@ class ToolPalettePanel(UIElement):
         return False
 
     def _handle_key_event(self, event: pygame.event.Event) -> bool:
-        """Handle keyboard events"""
-        # TODO: Implement keyboard navigation
+        """Handle keyboard events with enhanced navigation"""
+        # TODO: Implement enhanced keyboard navigation
         return False
 
     def _handle_toolbar_click(self, pos: Tuple[int, int]) -> bool:
-        """Handle toolbar button clicks"""
+        """Handle toolbar button clicks with enhanced feedback"""
         layout = self.config.layout
         button_size = layout.toolbar_button_size
         button_y = (self.toolbar_rect.height - button_size) // 2
@@ -1269,11 +1689,10 @@ class ToolPalettePanel(UIElement):
         return False
 
     def _get_group_header_at_position(self, pos: Tuple[int, int]) -> Optional[str]:
-        """Get group ID of header at position"""
+        """Get group ID of header at position with enhanced accuracy"""
         if not self.config.behavior.show_categories:
             return None
 
-        # pos is already relative to the panel, we need to make it relative to content area
         if not self.content_rect.collidepoint(pos):
             return None
 
@@ -1282,7 +1701,6 @@ class ToolPalettePanel(UIElement):
 
         # Check against stored group rects
         for group_id, stored_rect in self.group_rects.items():
-            # Convert stored rect (content space) to display space by applying scroll
             display_rect = pygame.Rect(
                 stored_rect.x,
                 stored_rect.y - self.scroll_y,
@@ -1296,28 +1714,25 @@ class ToolPalettePanel(UIElement):
         return None
 
     def _get_tool_at_position(self, pos: Tuple[int, int]) -> Optional[str]:
-        """Get tool ID at position"""
+        """Get tool ID at position with enhanced accuracy"""
         # Convert to content-relative coordinates
         relative_pos = (pos[0] - self.content_rect.x, pos[1] - self.content_rect.y)
 
         # Check against tool renderer rects
         for tool_id, renderer in self.renderers.items():
-            # The renderer.rect is stored in content space (without scroll offset)
-            # We need to convert it to display space for collision detection
             display_rect = pygame.Rect(
                 renderer.rect.x,
-                renderer.rect.y - self.scroll_y,  # Apply scroll offset
+                renderer.rect.y - self.scroll_y,
                 renderer.rect.width,
                 renderer.rect.height
             )
-            collision = display_rect.collidepoint(relative_pos)
 
-            if collision:
+            if display_rect.collidepoint(relative_pos):
                 return tool_id
         return None
 
     def select_tool(self, tool_id: Optional[str]):
-        """Select a tool"""
+        """Select a tool with enhanced feedback"""
         if self.selected_tool != tool_id:
             old_selection = self.selected_tool
             self.selected_tool = tool_id
@@ -1328,11 +1743,13 @@ class ToolPalettePanel(UIElement):
 
             self.rebuild_image()
 
-            # Track usage
+            # Enhanced usage tracking
             if tool_id and tool_id in self.tools:
                 self.tools[tool_id].use_tool()
+                if TOOL_DEBUG:
+                    print(f"Tool selected: {self.tools[tool_id].name} (used {self.tools[tool_id].use_count} times)")
 
-            # Send event
+            # Send enhanced event
             event_data = {
                 'ui_element': self,
                 'tool_id': tool_id,
@@ -1342,42 +1759,65 @@ class ToolPalettePanel(UIElement):
             pygame.event.post(pygame.event.Event(UI_TOOL_SELECTED, event_data))
 
     def set_view_mode(self, mode: ToolViewMode):
-        """Set the view mode"""
+        """Set the view mode with enhanced feedback"""
         if self.view_mode != mode:
+            old_mode = self.view_mode
             self.view_mode = mode
             self.scroll_y = 0  # Reset scroll
             self.rebuild_ui()
             self.rebuild_image()
 
-            # Send event
-            event_data = {'ui_element': self, 'view_mode': mode}
+            if TOOL_DEBUG:
+                print(f"View mode changed: {old_mode.value} -> {mode.value}")
+
+            # Send enhanced event
+            event_data = {
+                'ui_element': self,
+                'view_mode': mode,
+                'previous_mode': old_mode
+            }
             pygame.event.post(pygame.event.Event(UI_TOOL_VIEW_MODE_CHANGED, event_data))
 
     def set_search_query(self, query: str):
-        """Set search query"""
+        """Set search query with enhanced filtering"""
         if self.search_query != query:
+            old_query = self.search_query
             self.search_query = query
             self.scroll_y = 0  # Reset scroll
             self.rebuild_ui()
             self.rebuild_image()
 
-            # Send event
-            event_data = {'ui_element': self, 'search_query': query}
+            if TOOL_DEBUG:
+                visible_count = len(self.visible_tools)
+                print(f"Search changed: '{old_query}' -> '{query}' ({visible_count} tools visible)")
+
+            # Send enhanced event
+            event_data = {
+                'ui_element': self,
+                'search_query': query,
+                'previous_query': old_query,
+                'results_count': len(self.visible_tools)
+            }
             pygame.event.post(pygame.event.Event(UI_TOOL_SEARCH_CHANGED, event_data))
 
-    # Public API methods (following property panel pattern)
+    # ... [include remaining public API methods with enhanced error handling]
+
     def add_group(self, group: ToolGroup):
-        """Add a tool group"""
+        """Add a tool group with enhanced feedback"""
         self.tool_groups[group.id] = group
         for tool in group.tools:
             self.tools[tool.id] = tool
             if tool.is_favorite:
                 self.favorites.add(tool.id)
+
+        if TOOL_DEBUG:
+            print(f"Added group '{group.name}' with {len(group.tools)} tools")
+
         self.rebuild_ui()
         self.rebuild_image()
 
     def add_tool(self, tool: Tool, group_id: str = "default"):
-        """Add a tool to a group"""
+        """Add a tool to a group with enhanced feedback"""
         if group_id not in self.tool_groups:
             self.tool_groups[group_id] = ToolGroup(
                 id=group_id,
@@ -1390,12 +1830,17 @@ class ToolPalettePanel(UIElement):
         if tool.is_favorite:
             self.favorites.add(tool.id)
 
+        if TOOL_DEBUG:
+            print(f"Added tool '{tool.name}' to group '{group_id}'")
+
         self.rebuild_ui()
         self.rebuild_image()
 
     def remove_tool(self, tool_id: str) -> bool:
-        """Remove a tool"""
+        """Remove a tool with enhanced feedback"""
         if tool_id in self.tools:
+            tool_name = self.tools[tool_id].name
+
             # Remove from all groups
             for group in self.tool_groups.values():
                 group.remove_tool(tool_id)
@@ -1408,13 +1853,16 @@ class ToolPalettePanel(UIElement):
             if self.selected_tool == tool_id:
                 self.selected_tool = None
 
+            if TOOL_DEBUG:
+                print(f"Removed tool '{tool_name}'")
+
             self.rebuild_ui()
             self.rebuild_image()
             return True
         return False
 
     def toggle_favorite(self, tool_id: str):
-        """Toggle favorite status of a tool"""
+        """Toggle favorite status of a tool with enhanced feedback"""
         if tool_id in self.tools:
             tool = self.tools[tool_id]
             tool.is_favorite = not tool.is_favorite
@@ -1424,38 +1872,121 @@ class ToolPalettePanel(UIElement):
             else:
                 self.favorites.discard(tool_id)
 
+            if TOOL_DEBUG:
+                status = "favorited" if tool.is_favorite else "unfavorited"
+                print(f"Tool '{tool.name}' {status}")
+
             self.rebuild_image()
 
-            # Send event
+            # Send enhanced event
             event_type = UI_TOOL_FAVORITED if tool.is_favorite else UI_TOOL_UNFAVORITED
-            event_data = {'ui_element': self, 'tool_id': tool_id, 'tool': tool}
+            event_data = {
+                'ui_element': self,
+                'tool_id': tool_id,
+                'tool': tool,
+                'favorites_count': len(self.favorites)
+            }
             pygame.event.post(pygame.event.Event(event_type, event_data))
 
     def update(self, time_delta: float):
-        """Update the panel"""
+        """Update the panel with enhanced animations"""
         super().update(time_delta)
 
+        # Update renderer animations
+        needs_rebuild = False
+        for renderer in self.renderers.values():
+            old_hover_time = renderer.hover_time
+            old_press_time = renderer.press_time
+            renderer.update(time_delta)
 
-# Default theme
+            if (old_hover_time != renderer.hover_time or
+                    old_press_time != renderer.press_time):
+                needs_rebuild = True
+
+        if needs_rebuild:
+            self.rebuild_image()
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get comprehensive debug information"""
+        return {
+            'total_tools': len(self.tools),
+            'visible_tools': len(self.visible_tools),
+            'total_groups': len(self.tool_groups),
+            'visible_groups': len(self.visible_groups),
+            'favorites': len(self.favorites),
+            'selected_tool': self.selected_tool,
+            'focused_tool': self.focused_tool,
+            'view_mode': self.view_mode.value,
+            'search_query': self.search_query,
+            'scroll_position': f"{self.scroll_y}/{self.max_scroll}",
+            'content_height': self.content_height,
+            'theme_colors': len(self.theme_manager.get_all_colors()),
+            'panel_focused': self.is_panel_focused,
+        }
+
+
+# Theme definition with comprehensive color support
 TOOL_PALETTE_THEME = {
     "tool_palette_panel": {
         "colours": {
+            # Basic panel colors (matching property panel)
             "dark_bg": "#2d2d2d",
             "normal_text": "#ffffff",
             "secondary_text": "#b4b4b4",
+            "readonly_text": "#969696",
+
+            # Section/group colors
             "section_bg": "#232323",
             "section_text": "#c8c8c8",
+
+            # Tool-specific colors
             "tool_bg": "#3c3c3c",
             "tool_text": "#ffffff",
             "tool_border": "#646464",
+
+            # State colors
             "focused_bg": "#325078",
             "focused_border": "#78a0ff",
             "hovered_bg": "#323232",
             "selected_bg": "#4682b4",
+
+            # Tool-specific state colors
             "disabled_bg": "#1e1e1e",
-            "disabled_text": "#969696",
+            "disabled_text": "#646464",
+            "active_bg": "#5a96d2",
+            "active_border": "#8cb4ff",
+            "loading_bg": "#504032",
+            "loading_text": "#ffc864",
+
+            # Status colors
+            "error_bg": "#3c1414",
+            "error_text": "#ff6464",
+            "warning_bg": "#503c14",
+            "warning_text": "#ffc864",
+            "success_bg": "#143c14",
+            "success_text": "#64ff64",
+
+            # Tool-specific UI elements
             "favorite_star": "#ffd700",
-            "normal_border": "#505050"
+            "favorite_star_outline": "#b8960c",
+            "usage_indicator": "#64c864",
+            "search_highlight": "#ffff00",
+
+            # Borders and accents
+            "normal_border": "#505050",
+            "accent": "#64c864",
+
+            # Toolbar specific colors
+            "toolbar_bg": "#1e1e1e",
+            "toolbar_button_bg": "#323232",
+            "toolbar_button_text": "#ffffff",
+            "toolbar_button_active": "#4682b4",
+
+            # Search specific colors
+            "search_bg": "#282828",
+            "search_text": "#ffffff",
+            "search_placeholder": "#969696",
+            "search_border": "#646464",
         },
         "font": {
             "name": "arial",
@@ -1471,70 +2002,100 @@ def create_sample_tools() -> List[ToolGroup]:
     """Create sample tools for demonstration"""
     groups = []
 
-    # Creation Tools
+    # Creation Tools with properties
     creation_group = ToolGroup("creation", "Creation Tools", "Tools for creating new content")
-    creation_group.add_tool(Tool("new_file", "New File", "Create a new file", ToolType.CREATION, "File", shortcut="Ctrl+N"))
-    creation_group.add_tool(Tool("new_folder", "New Folder", "Create a new folder", ToolType.CREATION, "File", shortcut="Ctrl+Shift+N"))
+    creation_group.add_tool(
+        Tool("new_file", "New File", "Create a new file", ToolType.CREATION, "File", shortcut="Ctrl+N"))
+    creation_group.add_tool(
+        Tool("new_folder", "New Folder", "Create a new folder", ToolType.CREATION, "File", shortcut="Ctrl+Shift+N"))
     creation_group.add_tool(Tool("new_project", "New Project", "Create a new project", ToolType.CREATION, "Project"))
-    creation_group.add_tool(Tool("add_sprite", "Add Sprite", "Add a sprite to the scene", ToolType.CREATION, "Game", is_favorite=True))
+    creation_group.add_tool(
+        Tool("add_sprite", "Add Sprite", "Add a sprite to the scene", ToolType.CREATION, "Game", is_favorite=True))
     groups.append(creation_group)
 
-    # Edit Tools - ADD MISSING TOOLS
+    # Edit Tools with properties
     edit_group = ToolGroup("modification", "Edit Tools", "Tools for modifying content")
     edit_group.add_tool(Tool("cut", "Cut", "Cut selected items", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+X"))
     edit_group.add_tool(Tool("copy", "Copy", "Copy selected items", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+C"))
-    edit_group.add_tool(Tool("paste", "Paste", "Paste from clipboard", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+V"))
-    edit_group.add_tool(Tool("delete", "Delete", "Delete selected items", ToolType.MODIFICATION, "Edit", shortcut="Delete"))  # MISSING
-    edit_group.add_tool(Tool("undo", "Undo", "Undo last action", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+Z", is_favorite=True))
-    edit_group.add_tool(Tool("redo", "Redo", "Redo last undone action", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+Y"))  # MISSING
+    edit_group.add_tool(
+        Tool("paste", "Paste", "Paste from clipboard", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+V"))
+    edit_group.add_tool(
+        Tool("delete", "Delete", "Delete selected items", ToolType.MODIFICATION, "Edit", shortcut="Delete"))
+    edit_group.add_tool(
+        Tool("undo", "Undo", "Undo last action", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+Z", is_favorite=True))
+    edit_group.add_tool(
+        Tool("redo", "Redo", "Redo last undone action", ToolType.MODIFICATION, "Edit", shortcut="Ctrl+Y"))
+    edit_group.add_tool(Tool("find", "Find", "Find and replace text", ToolType.UTILITY, "Edit", shortcut="Ctrl+F"))
     groups.append(edit_group)
 
-    # Navigation Tools - ADD MISSING TOOL
-    nav_group = ToolGroup("navigation", "Navigation", "Tools for navigation")
+    # Navigation Tools with properties
+    nav_group = ToolGroup("navigation", "Navigation", "Tools for navigation and view control")
     nav_group.add_tool(Tool("zoom_in", "Zoom In", "Zoom in on content", ToolType.NAVIGATION, "View", shortcut="Ctrl++"))
-    nav_group.add_tool(Tool("zoom_out", "Zoom Out", "Zoom out from content", ToolType.NAVIGATION, "View", shortcut="Ctrl+-"))
-    nav_group.add_tool(Tool("fit_view", "Fit to View", "Fit content to view", ToolType.NAVIGATION, "View", shortcut="Ctrl+0"))  # MISSING
-    nav_group.add_tool(Tool("pan_tool", "Pan Tool", "Pan around content", ToolType.NAVIGATION, "View", shortcut="Space"))
+    nav_group.add_tool(
+        Tool("zoom_out", "Zoom Out", "Zoom out from content", ToolType.NAVIGATION, "View", shortcut="Ctrl+-"))
+    nav_group.add_tool(
+        Tool("fit_view", "Fit to View", "Fit content to view", ToolType.NAVIGATION, "View", shortcut="Ctrl+0"))
+    nav_group.add_tool(
+        Tool("pan_tool", "Pan Tool", "Pan around content", ToolType.NAVIGATION, "View", shortcut="Space"))
+    nav_group.add_tool(
+        Tool("fullscreen", "Fullscreen", "Toggle fullscreen mode", ToolType.NAVIGATION, "View", shortcut="F11"))
     groups.append(nav_group)
+
+    # Analysis Tools (new group)
+    analysis_group = ToolGroup("analysis", "Analysis Tools", "Tools for analyzing and debugging")
+    analysis_group.add_tool(
+        Tool("profiler", "Profiler", "Profile application performance", ToolType.ANALYSIS, "Debug", is_loading=True))
+    analysis_group.add_tool(
+        Tool("inspector", "Inspector", "Inspect object properties", ToolType.ANALYSIS, "Debug", is_favorite=True))
+    analysis_group.add_tool(Tool("console", "Console", "Open debug console", ToolType.DEBUG, "Debug", shortcut="F12"))
+    analysis_group.add_tool(Tool("memory", "Memory Usage", "View memory consumption", ToolType.ANALYSIS, "Debug"))
+    groups.append(analysis_group)
 
     return groups
 
 
 def main():
-    """Example demonstration with debugging"""
+    """demonstration with comprehensive theming features"""
     pygame.init()
-    screen = pygame.display.set_mode((1200, 800))
+    screen = pygame.display.set_mode((1400, 900))
     pygame.display.set_caption("Tool Palette Panel Demo")
     clock = pygame.time.Clock()
 
     # Create manager with theme
-    manager = pygame_gui.UIManager((1200, 800), TOOL_PALETTE_THEME)
+    manager = pygame_gui.UIManager((1400, 900), TOOL_PALETTE_THEME)
 
-    # Create tool palette
+    # Create tool palette with configuration
+    enhanced_config = ToolPaletteConfig()
+    enhanced_config.behavior.show_usage_stats = True
+    enhanced_config.behavior.animate_hover_effects = True
+    enhanced_config.behavior.show_loading_indicators = True
+
     tool_palette = ToolPalettePanel(
-        pygame.Rect(50, 50, 400, 600),
+        pygame.Rect(50, 50, 450, 700),
         manager,
-        ToolPaletteConfig(),
-        object_id=ObjectID(object_id='#main_palette', class_id='@tool_palette')
+        enhanced_config,
+        object_id=ObjectID(object_id='#main_palette', class_id='@enhanced_tool_palette')
     )
 
     # Add sample tools
     sample_groups = create_sample_tools()
-    print(f"Created {len(sample_groups)} sample groups:")
     for group in sample_groups:
-        print(f"  {group.name}: {[tool.name for tool in group.tools]}")
         tool_palette.add_group(group)
 
-    print(f"\nAfter adding groups:")
-    print(f"  Total tools in palette: {len(tool_palette.tools)}")
-    print(f"  Tool IDs: {list(tool_palette.tools.keys())}")
-    print(f"  Visible tools: {[t.name for t in tool_palette.visible_tools]}")
-
     print("\nTool Palette Panel Demo")
-    print("Controls:")
+    print("\nControls:")
     print("- Press 'G/L/D' to change view mode")
     print("- Press 'S' to toggle search")
-    print("- Click group headers to expand/collapse")
+    print("- Press 'T' to toggle theme (dark/light)")
+    print("- Press 'F' to toggle favorites for selected tool")
+    print("- Press 'U' to toggle usage statistics")
+    print("- Press 'A' to toggle animations")
+    print("- Press 'R' to reset view")
+    print("- Press 'I' to show debug info")
+
+    # demo state
+    current_theme = "dark"
+    show_debug_info = False
 
     running = True
     while running:
@@ -1559,15 +2120,89 @@ def main():
                     query = "new" if not tool_palette.search_query else ""
                     tool_palette.set_search_query(query)
                     print(f"Search set to: '{query}'")
+                elif event.key == pygame.K_t:
+                    # Toggle theme
+                    if current_theme == "dark":
+                        # Switch to light theme with proper hover colors
+                        light_colors = {
+                            'dark_bg': pygame.Color(240, 240, 240),
+                            'tool_bg': pygame.Color(255, 255, 255),
+                            'section_bg': pygame.Color(230, 230, 230),
+                            'normal_text': pygame.Color(0, 0, 0),
+                            'tool_text': pygame.Color(0, 0, 0),
+                            'section_text': pygame.Color(50, 50, 50),
+                            'secondary_text': pygame.Color(100, 100, 100),
+                            'tool_border': pygame.Color(180, 180, 180),
+                            'normal_border': pygame.Color(200, 200, 200),
+                            # Fixed hover colors for light theme
+                            'hovered_bg': pygame.Color(230, 240, 255),  # Light blue hover
+                            'hovered_text': pygame.Color(0, 0, 0),  # Keep text dark
+                            'selected_bg': pygame.Color(180, 210, 255),  # Darker blue for selection
+                            'focused_border': pygame.Color(100, 150, 255),
+                            # Toolbar colors for light theme
+                            'toolbar_bg': pygame.Color(220, 220, 220),
+                            'toolbar_button_bg': pygame.Color(240, 240, 240),
+                            'toolbar_button_text': pygame.Color(0, 0, 0),
+                            'toolbar_button_active': pygame.Color(180, 210, 255),
+                            # Search colors for light theme
+                            'search_bg': pygame.Color(250, 250, 250),
+                            'search_text': pygame.Color(0, 0, 0),
+                            'search_placeholder': pygame.Color(120, 120, 120),
+                            'search_border': pygame.Color(180, 180, 180),
+                        }
+                        tool_palette.apply_color_scheme(light_colors)
+                        current_theme = "light"
+                        print("Switched to light theme")
+                    else:
+                        # Reset to dark theme
+                        tool_palette.theme_manager.update_theme_data()
+                        tool_palette.rebuild_image()
+                        current_theme = "dark"
+                        print("Switched to dark theme")
+                elif event.key == pygame.K_f:
+                    # Toggle favorite for selected tool
+                    if tool_palette.selected_tool:
+                        tool_palette.toggle_favorite(tool_palette.selected_tool)
+                elif event.key == pygame.K_u:
+                    # Toggle usage statistics
+                    tool_palette.config.behavior.show_usage_stats = not tool_palette.config.behavior.show_usage_stats
+                    tool_palette.rebuild_image()
+                    print(f"Usage statistics: {'on' if tool_palette.config.behavior.show_usage_stats else 'off'}")
+                elif event.key == pygame.K_a:
+                    # Toggle animations
+                    tool_palette.config.behavior.animate_hover_effects = not tool_palette.config.behavior.animate_hover_effects
+                    print(f"Animations: {'on' if tool_palette.config.behavior.animate_hover_effects else 'off'}")
+                elif event.key == pygame.K_r:
+                    # Reset view
+                    tool_palette.set_view_mode(ToolViewMode.GRID)
+                    tool_palette.set_search_query("")
+                    tool_palette.scroll_y = 0
+                    tool_palette.rebuild_ui()
+                    tool_palette.rebuild_image()
+                    print("View reset")
+                elif event.key == pygame.K_i:
+                    # Toggle debug info display
+                    show_debug_info = not show_debug_info
+                    print(f"Debug info: {'on' if show_debug_info else 'off'}")
 
             # Handle custom events
             elif event.type == UI_TOOL_SELECTED:
                 if event.tool:
-                    print(f"Tool selected: {event.tool.name}")
+                    print(f"Tool selected: {event.tool.name} (used {event.tool.use_count} times)")
 
             elif event.type == UI_TOOL_DOUBLE_CLICKED:
                 if event.tool:
                     print(f"Tool executed: {event.tool.name}")
+
+            elif event.type == UI_TOOL_RIGHT_CLICKED:
+                if event.tool:
+                    print(f"Right-clicked tool: {event.tool.name}")
+
+            elif event.type == UI_TOOL_FAVORITED:
+                print(f"Tool favorited: {event.tool.name} (total favorites: {event.favorites_count})")
+
+            elif event.type == UI_TOOL_UNFAVORITED:
+                print(f"Tool unfavorited: {event.tool.name} (total favorites: {event.favorites_count})")
 
             elif event.type == UI_TOOL_GROUP_EXPANDED:
                 print(f"Group expanded: {event.group.name}")
@@ -1575,44 +2210,85 @@ def main():
             elif event.type == UI_TOOL_GROUP_COLLAPSED:
                 print(f"Group collapsed: {event.group.name}")
 
+            elif event.type == UI_TOOL_VIEW_MODE_CHANGED:
+                print(f"View mode changed: {event.previous_mode.value} -> {event.view_mode.value}")
+
+            elif event.type == UI_TOOL_SEARCH_CHANGED:
+                print(
+                    f"Search changed: '{event.previous_query}' -> '{event.search_query}' ({event.results_count} results)")
+
             # Pass to manager and tool palette
             manager.process_events(event)
-            # tool_palette.process_event(event)
 
+        # Update with timing
         manager.update(time_delta)
+        tool_palette.update(time_delta)
 
-        # Draw
-        screen.fill((30, 30, 30))
+        # Draw interface
+        screen.fill((35, 35, 35))
 
-        # Info
-        font = pygame.font.Font(None, 24)
+        # info display
+        font = pygame.font.Font(None, 28)
         info_text = font.render("Tool Palette Demo", True, pygame.Color(255, 255, 255))
-        screen.blit(info_text, (500, 50))
+        screen.blit(info_text, (550, 50))
 
+        # status information
         info_font = pygame.font.Font(None, 18)
         y_offset = 100
 
+        # Get debug info
+        debug_info = tool_palette.get_debug_info()
+
         info_lines = [
-            f"View Mode: {tool_palette.view_mode.value.title()}",
-            f"Search: '{tool_palette.search_query}'" if tool_palette.search_query else "Search: (none)",
-            f"Tools: {len(tool_palette.visible_tools)} visible / {len(tool_palette.tools)} total",
-            f"Groups: {len(tool_palette.tool_groups)}",
-            f"Selected: {tool_palette.selected_tool or '(none)'}",
-            f"Renderers: {len(tool_palette.renderers)}",
+            f"Theme: {current_theme.title()}",
+            f"View Mode: {debug_info['view_mode'].title()}",
+            f"Search: '{debug_info['search_query']}'" if debug_info['search_query'] else "Search: (none)",
+            f"Tools: {debug_info['visible_tools']}/{debug_info['total_tools']} visible",
+            f"Groups: {debug_info['visible_groups']}/{debug_info['total_groups']} visible",
+            f"Favorites: {debug_info['favorites']}",
+            f"Selected: {debug_info['selected_tool'] or '(none)'}",
+            f"Scroll: {debug_info['scroll_position']}",
+            f"Animations: {'on' if tool_palette.config.behavior.animate_hover_effects else 'off'}",
+            f"Usage Stats: {'on' if tool_palette.config.behavior.show_usage_stats else 'off'}",
             "",
-            "Press G/L/D for view modes",
-            "Press S to toggle search",
-            "Click headers to expand/collapse",
+            "Hotkeys:",
+            "G/L/D - View modes",
+            "S - Toggle search",
+            "T - Toggle theme",
+            "F - Toggle favorite",
+            "U - Toggle usage stats",
+            "A - Toggle animations",
+            "R - Reset view",
+            "I - Toggle debug info",
         ]
 
         for i, line in enumerate(info_lines):
-            color = pygame.Color(200, 200, 200)
+            color = pygame.Color(255, 255, 255) if not line.startswith(" ") else pygame.Color(200, 200, 200)
             text = info_font.render(line, True, color)
-            screen.blit(text, (500, y_offset + i * 20))
+            screen.blit(text, (550, y_offset + i * 22))
 
-        tool_palette.draw(screen)  # draw first
-        manager.draw_ui(screen)  # draw UIManager elements on top
+        # Show debug info if enabled
+        if show_debug_info:
+            debug_y = y_offset + len(info_lines) * 22 + 20
+            debug_font = pygame.font.Font(None, 16)
+
+            debug_text = debug_font.render("DEBUG INFO", True, pygame.Color(255, 255, 0))
+            screen.blit(debug_text, (550, debug_y))
+            debug_y += 25
+
+            for key, value in debug_info.items():
+                if key not in ['view_mode', 'search_query', 'visible_tools', 'total_tools',
+                               'visible_groups', 'total_groups', 'favorites', 'selected_tool']:
+                    debug_line = f"{key}: {value}"
+                    debug_text = debug_font.render(debug_line, True, pygame.Color(200, 200, 200))
+                    screen.blit(debug_text, (550, debug_y))
+                    debug_y += 18
+
+        # Draw the tool palette
+        # tool_palette.draw(screen)
+        manager.draw_ui(screen)
         pygame.display.flip()
+
     pygame.quit()
 
 
