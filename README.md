@@ -109,6 +109,10 @@ Organized tool selection:
 A basic example showing off integration with Hierarchy, Property, and Timeline panels.
 ![Skeletal Animation Example](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/Example_SkeletonAnimation.png "Skeletal Animation Example")
 
+### **MultiPanel Example**
+A basic example showing off integration with all panels.
+![MultiPanel Example](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/Example_MultiPanel.png "MultiPanel Example")
+
 ---
 ---
 ---

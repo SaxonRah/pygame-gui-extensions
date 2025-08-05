@@ -1,3 +1,4 @@
 /.idea
 /pygame_gui_extensions/wip/asset_cache
 /pygame_gui_extensions/__pycache__
+/examples/asset_cache

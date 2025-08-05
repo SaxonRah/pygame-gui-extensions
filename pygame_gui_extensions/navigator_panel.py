@@ -266,10 +266,8 @@ class NavigatorThemeManager:
 
     def _get_element_ids(self) -> List[str]:
         """Get element IDs for theme lookup - matches PropertyPanel approach"""
-        element_ids = []
-
-        # Add the base element type
-        element_ids.append('navigator_panel')
+        # Create element_ids and add the base element type
+        element_ids = ['navigator_panel']
 
         # Add object_id and class_id from the UIElement
         if hasattr(self.ui_element, 'object_ids') and self.ui_element.object_ids:
@@ -796,7 +794,7 @@ class NavigatorPanel(UIElement):
         self.thumbnail_cache: Optional[pygame.Surface] = None
         self.cache_invalid = True
         self._last_update_time = 0
-        self._needs_rebuild = True
+        self.needs_rebuild = True
 
         # Layout state
         self._last_rebuild_state = None
@@ -813,7 +811,7 @@ class NavigatorPanel(UIElement):
         self.image = pygame.Surface(self.rect.size).convert()
 
         # Initial render
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _needs_layout_rebuild(self) -> bool:
         """Check if layout needs rebuilding"""
@@ -873,9 +871,9 @@ class NavigatorPanel(UIElement):
 
         self.theme_manager.rebuild_from_changed_theme_data()
         self.cache_invalid = True
-        self._needs_rebuild = True
+        self.needs_rebuild = True
         self._last_rebuild_state = None  # Force layout recalculation
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _setup_element_object_ids(self):
         """Setup object IDs for theme lookup - called by UIElement"""
@@ -883,9 +881,9 @@ class NavigatorPanel(UIElement):
         # to set up proper theme ID chains
         pass
 
-    def _rebuild_image(self):
+    def rebuild_image(self):
         """Rebuild the image surface with comprehensive error handling"""
-        if not self._needs_rebuild:
+        if not self.needs_rebuild:
             return
 
         try:
@@ -927,7 +925,7 @@ class NavigatorPanel(UIElement):
             border_width = 2 if self.is_focused else 1
             pygame.draw.rect(self.image, border_color, self.image.get_rect(), border_width)
 
-            self._needs_rebuild = False
+            self.needs_rebuild = False
 
         except Exception as e:
             if NAVIGATOR_DEBUG:
@@ -1282,8 +1280,8 @@ class NavigatorPanel(UIElement):
                         self.viewport.clamp_to_content()
 
                     self._fire_viewport_changed_event()
-                    self._needs_rebuild = True
-                    self._rebuild_image()
+                    self.needs_rebuild = True
+                    self.rebuild_image()
 
                     # Start dragging if enabled
                     if self.config.interaction.drag_to_pan:
@@ -1327,8 +1325,8 @@ class NavigatorPanel(UIElement):
             if self.zoom_control:
                 if self.zoom_control.handle_mouse_up(pos):
                     consumed = True
-                    self._needs_rebuild = True
-                    self._rebuild_image()
+                    self.needs_rebuild = True
+                    self.rebuild_image()
 
             # Handle drag end
             if button == 1 and self.is_dragging:
@@ -1382,8 +1380,8 @@ class NavigatorPanel(UIElement):
                 print(f"Error handling mouse motion: {e}")
 
         if hover_changed:
-            self._needs_rebuild = True
-            self._rebuild_image()
+            self.needs_rebuild = True
+            self.rebuild_image()
 
         return hover_changed
 
@@ -1562,8 +1560,8 @@ class NavigatorPanel(UIElement):
                     self.viewport.clamp_to_content()
 
                 self._fire_viewport_changed_event()
-                self._needs_rebuild = True
-                self._rebuild_image()
+                self.needs_rebuild = True
+                self.rebuild_image()
         except Exception as e:
             if NAVIGATOR_DEBUG:
                 print(f"Error panning: {e}")
@@ -1604,9 +1602,9 @@ class NavigatorPanel(UIElement):
 
                 # Check if we need to rebuild
                 if (self.cache_invalid or
-                        (self.config.interaction.thumbnail_update_on_change and self._needs_rebuild)):
+                        (self.config.interaction.thumbnail_update_on_change and self.needs_rebuild)):
                     self.cache_invalid = False
-                    self._rebuild_image()
+                    self.rebuild_image()
         except Exception as e:
             if NAVIGATOR_DEBUG:
                 print(f"Error in update: {e}")
@@ -1623,8 +1621,8 @@ class NavigatorPanel(UIElement):
             self.viewport.total_content_height = content_h
 
             self.cache_invalid = True
-            self._needs_rebuild = True
-            self._rebuild_image()
+            self.needs_rebuild = True
+            self.rebuild_image()
 
             # Fire content changed event
             event_data = {
@@ -1643,8 +1641,8 @@ class NavigatorPanel(UIElement):
             if self.config.behavior.clamp_viewport_to_content:
                 self.viewport.clamp_to_content()
             self._fire_viewport_changed_event()
-            self._needs_rebuild = True
-            self._rebuild_image()
+            self.needs_rebuild = True
+            self.rebuild_image()
         except Exception as e:
             if NAVIGATOR_DEBUG:
                 print(f"Error setting viewport: {e}")
@@ -1684,8 +1682,8 @@ class NavigatorPanel(UIElement):
                     self.viewport.clamp_to_content()
 
                 self._fire_zoom_changed_event()
-                self._needs_rebuild = True
-                self._rebuild_image()
+                self.needs_rebuild = True
+                self.rebuild_image()
         except Exception as e:
             if NAVIGATOR_DEBUG:
                 print(f"Error setting zoom: {e}")
@@ -1730,8 +1728,8 @@ class NavigatorPanel(UIElement):
         """Force refresh of the navigator"""
         try:
             self.cache_invalid = True
-            self._needs_rebuild = True
-            self._rebuild_image()
+            self.needs_rebuild = True
+            self.rebuild_image()
         except Exception as e:
             if NAVIGATOR_DEBUG:
                 print(f"Error refreshing navigator: {e}")
@@ -1759,9 +1757,9 @@ class NavigatorPanel(UIElement):
 
             # Force complete rebuild
             self.cache_invalid = True
-            self._needs_rebuild = True
+            self.needs_rebuild = True
             self._last_rebuild_state = None
-            self._rebuild_image()
+            self.rebuild_image()
 
             if NAVIGATOR_DEBUG:
                 print("Navigator configuration updated")
@@ -2423,7 +2421,7 @@ def main():
                     perf_lines = [
                         "Debug Information:",
                         f"  Cache Invalid: {navigator.cache_invalid}",
-                        f"  Needs Rebuild: {navigator._needs_rebuild}",
+                        f"  Needs Rebuild: {navigator.needs_rebuild}",
                         f"  Is Dragging: {navigator.is_dragging}",
                         f"  Is Focused: {navigator.is_focused}",
                     ]

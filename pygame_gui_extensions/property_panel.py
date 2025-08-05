@@ -1624,6 +1624,10 @@ class PropertyPanel(UIElement):
         self.rebuild_ui()
         self.rebuild_image()
 
+    def clear_properties(self):
+        self.visible_properties.clear()
+        self.section_rects.clear()
+
     def rebuild_ui(self):
         """Rebuild the UI layout with improved configuration support"""
         if not self._needs_rebuild():
@@ -1632,8 +1636,7 @@ class PropertyPanel(UIElement):
         if PROPERTY_DEBUG:
             print("Rebuilding property inspector UI...")
 
-        self.visible_properties.clear()
-        self.section_rects.clear()
+        self.clear_properties()
 
         current_y = 0
         label_width = max(self.config.layout.min_label_width,

@@ -759,7 +759,7 @@ class ConsolePanel(UIElement):
             self._add_welcome_message()
 
         # Initial render
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _force_theme_update(self, theme_dict: dict):
         """Force update theme colors from dictionary"""
@@ -768,7 +768,7 @@ class ConsolePanel(UIElement):
             for color_name, color_value in colors.items():
                 if color_value.startswith('#'):
                     self.theme_manager.themed_colors[color_name] = pygame.Color(color_value)
-            self._rebuild_image()
+            self.rebuild_image()
 
     def _calculate_layout(self):
         """Calculate layout rectangles"""
@@ -842,7 +842,7 @@ class ConsolePanel(UIElement):
             self._scroll_to_bottom()
 
         # Update display
-        self._rebuild_image()
+        self.rebuild_image()
 
         # Send event
         event_data = {
@@ -880,7 +880,7 @@ class ConsolePanel(UIElement):
         """Scroll to bottom of output"""
         self.scroll_y = self.max_scroll_y
 
-    def _rebuild_image(self):
+    def rebuild_image(self):
         """Rebuild the console image"""
         # Fill background
         bg_color = self.theme_manager.get_color('console_bg')
@@ -1461,7 +1461,7 @@ class ConsolePanel(UIElement):
         }
         pygame.event.post(pygame.event.Event(UI_CONSOLE_COMMAND_EXECUTED, event_data))
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _navigate_history(self, direction: int):
         """Navigate command history"""
@@ -1474,7 +1474,7 @@ class ConsolePanel(UIElement):
             self.input_cursor_pos = len(self.current_input)
             self.input_selection_start = -1
             self.input_selection_end = -1
-            self._rebuild_image()
+            self.rebuild_image()
 
     def _handle_autocomplete(self):
         """Handle tab completion"""
@@ -1515,7 +1515,7 @@ class ConsolePanel(UIElement):
             # Multiple completions - show them
             self._add_output("Completions: " + ", ".join(completions), ConsoleOutputType.INFO)
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _insert_text(self, text: str):
         """Insert text at cursor position"""
@@ -1533,7 +1533,7 @@ class ConsolePanel(UIElement):
                                   self.current_input[self.input_cursor_pos:])
             self.input_cursor_pos += len(text)
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _handle_backspace(self):
         """Handle backspace key"""
@@ -1551,7 +1551,7 @@ class ConsolePanel(UIElement):
                                   self.current_input[self.input_cursor_pos:])
             self.input_cursor_pos -= 1
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _handle_delete(self):
         """Handle delete key"""
@@ -1568,7 +1568,7 @@ class ConsolePanel(UIElement):
             self.current_input = (self.current_input[:self.input_cursor_pos] +
                                   self.current_input[self.input_cursor_pos + 1:])
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _move_cursor(self, direction: int, select: bool = False):
         """Move cursor left or right"""
@@ -1583,7 +1583,7 @@ class ConsolePanel(UIElement):
             self.input_selection_end = -1
 
         self.input_cursor_pos = new_pos
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _move_cursor_to_start(self, select: bool = False):
         """Move cursor to start of input"""
@@ -1596,7 +1596,7 @@ class ConsolePanel(UIElement):
             self.input_selection_end = -1
 
         self.input_cursor_pos = 0
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _move_cursor_to_end(self, select: bool = False):
         """Move cursor to end of input"""
@@ -1609,13 +1609,13 @@ class ConsolePanel(UIElement):
             self.input_selection_end = -1
 
         self.input_cursor_pos = len(self.current_input)
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _select_all_input(self):
         """Select all input text"""
         self.input_selection_start = 0
         self.input_selection_end = len(self.current_input)
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _copy_selection(self):
         """Copy selected text to clipboard"""
@@ -1648,7 +1648,7 @@ class ConsolePanel(UIElement):
         self.input_selection_start = -1
         self.input_selection_end = -1
         self.multiline_input = False
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _position_cursor_from_mouse(self, mouse_pos: Tuple[int, int]):
         """Position cursor based on mouse click"""
@@ -1690,7 +1690,7 @@ class ConsolePanel(UIElement):
         self.input_selection_start = -1
         self.input_selection_end = -1
 
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _start_output_selection(self, mouse_pos: Tuple[int, int]):
         """Start selecting output text"""
@@ -1703,12 +1703,12 @@ class ConsolePanel(UIElement):
         relative_y = mouse_pos[1] - self.scrollbar_rect.y
         scroll_ratio = relative_y / self.scrollbar_rect.height
         self.scroll_y = int(scroll_ratio * self.max_scroll_y)
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _scroll_output(self, amount: int):
         """Scroll output by specified amount"""
         self.scroll_y = max(0, min(self.max_scroll_y, self.scroll_y + amount))
-        self._rebuild_image()
+        self.rebuild_image()
 
     def update(self, time_delta: float):
         """Update console (handle cursor blinking, key repeats, etc.)"""
@@ -1720,7 +1720,7 @@ class ConsolePanel(UIElement):
             self.cursor_visible = not self.cursor_visible
             self.last_cursor_blink = current_time
             if self.is_focused:
-                self._rebuild_image()
+                self.rebuild_image()
 
         # Process key repeats
         if self.is_focused:
@@ -1733,7 +1733,7 @@ class ConsolePanel(UIElement):
             self.filtered_output.clear()
             self.scroll_y = 0
             self.max_scroll_y = 0
-            self._rebuild_image()
+            self.rebuild_image()
 
             # Send event
             event_data = {
@@ -1746,7 +1746,7 @@ class ConsolePanel(UIElement):
         """Set output filter"""
         self.output_filter = filter_text
         self._update_filtered_output()
-        self._rebuild_image()
+        self.rebuild_image()
 
         # Send event
         event_data = {
@@ -1777,12 +1777,12 @@ class ConsolePanel(UIElement):
         """Change syntax highlighting theme"""
         self.config.syntax_theme = theme
         self.syntax_highlighter = ConsoleSyntaxHighlighter(theme)
-        self._rebuild_image()
+        self.rebuild_image()
 
     def rebuild_from_changed_theme_data(self):
         """Rebuild when theme data changes"""
         self._update_theme_data()
-        self._rebuild_image()
+        self.rebuild_image()
 
 
 # Default theme for console panel
@@ -1998,7 +1998,7 @@ def main():
                     console.config = standard_config
                     console._calculate_layout()
                     console._update_theme_data()
-                    console._rebuild_image()
+                    console.rebuild_image()
                     current_config = "standard"
                     print("Switched to: Standard Configuration")
 
@@ -2007,7 +2007,7 @@ def main():
                     console.config = compact_config
                     console._calculate_layout()
                     console._update_theme_data()
-                    console._rebuild_image()
+                    console.rebuild_image()
                     current_config = "compact"
                     print("Switched to: Compact Configuration")
 
@@ -2016,7 +2016,7 @@ def main():
                     console.config = large_config
                     console._calculate_layout()
                     console._update_theme_data()
-                    console._rebuild_image()
+                    console.rebuild_image()
                     current_config = "large"
                     print("Switched to: Large Configuration")
 

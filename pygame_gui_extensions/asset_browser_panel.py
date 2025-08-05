@@ -1184,7 +1184,7 @@ class AssetBrowserPanel(UIElement):
 
         # Initialize - Force initial build
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def __del__(self):
         """Cleanup when destroyed"""
@@ -1196,7 +1196,7 @@ class AssetBrowserPanel(UIElement):
         self.theme_manager.rebuild_from_changed_theme_data()
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def _filter_and_sort_assets(self) -> List[str]:
         """Filter and sort assets based on current criteria with configuration support"""
@@ -1361,7 +1361,7 @@ class AssetBrowserPanel(UIElement):
         self.content_height = len(self.visible_assets) * item_height
         self.max_scroll = max(0, self.content_height - self.rect.height)
 
-    def _rebuild_image(self):
+    def rebuild_image(self):
         """Rebuild the image surface with improved theming and performance"""
         # Fill background
         bg_color = self.theme_manager.get_color('dark_bg')
@@ -1605,7 +1605,7 @@ class AssetBrowserPanel(UIElement):
             # Force rebuild to show selection changes
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
             return True
         else:
             # Click on empty space
@@ -1616,7 +1616,7 @@ class AssetBrowserPanel(UIElement):
                 # self.selection_anchor remains unchanged
                 self._force_rebuild = True
                 self.rebuild_ui()
-                self._rebuild_image()
+                self.rebuild_image()
             return True
 
         return False
@@ -1633,7 +1633,7 @@ class AssetBrowserPanel(UIElement):
                 self.focused_asset = clicked_asset
                 self._force_rebuild = True
                 self.rebuild_ui()
-                self._rebuild_image()
+                self.rebuild_image()
 
             # Fire context menu event
             event_data = {
@@ -1677,7 +1677,7 @@ class AssetBrowserPanel(UIElement):
 
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         # Handle drag motion
@@ -1702,7 +1702,7 @@ class AssetBrowserPanel(UIElement):
         if old_scroll != self.scroll_y:
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
             return True
 
         return False
@@ -1734,7 +1734,7 @@ class AssetBrowserPanel(UIElement):
 
                 self._force_rebuild = True
                 self.rebuild_ui()
-                self._rebuild_image()
+                self.rebuild_image()
                 return True
 
         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
@@ -1781,7 +1781,7 @@ class AssetBrowserPanel(UIElement):
                 self.config.behavior.animate_loading):
             has_loading = any(asset.is_loading_thumbnail for asset in self.assets.values())
             if has_loading:
-                self._rebuild_image()
+                self.rebuild_image()
 
     # Public API methods with configuration support
     def add_asset(self, file_path: Union[str, Path], asset_type: AssetType = None,
@@ -1821,7 +1821,7 @@ class AssetBrowserPanel(UIElement):
         # Rebuild UI to show new asset
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
         # Fire event
         event_data = {
@@ -1952,14 +1952,14 @@ class AssetBrowserPanel(UIElement):
         self.current_collection = collection_id
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def set_search_query(self, query: str):
         """Set search query and filter assets"""
         self.search_query = query.strip()
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
         # Fire search event
         event_data = {
@@ -1975,7 +1975,7 @@ class AssetBrowserPanel(UIElement):
             self.config.default_view_mode = view_mode  # Update config
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
     def get_selected_assets(self) -> List[AssetItem]:
         """Get currently selected assets"""
@@ -1988,7 +1988,7 @@ class AssetBrowserPanel(UIElement):
             self.focused_asset = asset_id
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
     def clear_selection(self):
         """Clear asset selection"""
@@ -1996,7 +1996,7 @@ class AssetBrowserPanel(UIElement):
         self.focused_asset = None
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     def remove_asset(self, asset_id: str):
         """Remove an asset"""
@@ -2015,13 +2015,13 @@ class AssetBrowserPanel(UIElement):
 
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
     def refresh(self):
         """Refresh the asset browser"""
         self._force_rebuild = True
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
 
     # Configuration update methods
     def update_layout_config(self, layout_config: AssetLayoutConfig):
@@ -2030,7 +2030,7 @@ class AssetBrowserPanel(UIElement):
         self.config.layout = copy.deepcopy(layout_config)
         self._force_rebuild = True  # Force rebuild
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
         print(
             f"Layout config updated - grid size: {self.config.layout.grid_item_width}x{self.config.layout.grid_item_height}")
 
@@ -2040,7 +2040,7 @@ class AssetBrowserPanel(UIElement):
         self.config.behavior = copy.deepcopy(behavior_config)
         self._force_rebuild = True  # Force rebuild
         self.rebuild_ui()
-        self._rebuild_image()
+        self.rebuild_image()
         print(f"Behavior config updated - metadata overlay: {self.config.behavior.show_metadata_overlay}")
 
     def update_interaction_config(self, interaction_config: AssetInteractionConfig):
@@ -2118,7 +2118,7 @@ class AssetBrowserPanel(UIElement):
 
             self._force_rebuild = True
             self.rebuild_ui()
-            self._rebuild_image()
+            self.rebuild_image()
 
         except Exception as e:
             if ASSET_DEBUG:
@@ -2266,7 +2266,7 @@ def main():
     # FORCE initial rebuild to show assets
     asset_browser._force_rebuild = True
     asset_browser.rebuild_ui()
-    asset_browser._rebuild_image()
+    asset_browser.rebuild_image()
 
     # Instructions
     print("\nConfigurable Asset Browser Panel Demo")
@@ -2367,7 +2367,7 @@ def main():
                     asset_browser.config.behavior.show_metadata_overlay = not current_show_metadata
                     asset_browser._force_rebuild = True
                     asset_browser.rebuild_ui()
-                    asset_browser._rebuild_image()
+                    asset_browser.rebuild_image()
                     print(f"Metadata overlay: {'ON' if not current_show_metadata else 'OFF'}")
 
                 elif event.key == pygame.K_e:
@@ -2376,7 +2376,7 @@ def main():
                     asset_browser.config.behavior.show_file_extensions = not current_show_ext
                     asset_browser._force_rebuild = True
                     asset_browser.rebuild_ui()
-                    asset_browser._rebuild_image()
+                    asset_browser.rebuild_image()
                     print(f"File extensions: {'ON' if not current_show_ext else 'OFF'}")
 
                 elif event.key == pygame.K_t:
@@ -2405,7 +2405,7 @@ def main():
                         asset_browser.is_light_theme = False
                         print("Switched to dark theme")
 
-                    asset_browser._rebuild_image()
+                    asset_browser.rebuild_image()
 
                 elif event.key == pygame.K_r:
                     # Reset configuration to defaults
