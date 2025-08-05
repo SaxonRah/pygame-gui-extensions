@@ -2,7 +2,7 @@
 
 ![PyGame GUI Extensions](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/pygame_gui_extensions.png "PyGame GUI Extensions")
 
-# PyGame GUI Extensions - [Version 0.1]
+# PyGame GUI Extensions - [Version 0.2]
 
 ---
 
@@ -12,7 +12,7 @@ This extension is being built to facilitate [PySpine](https://github.com/SaxonRa
 
 ---
 
-# Completed Version 0.1 Panels
+# Completed Version 0.2 Panels
 
 ---
 
