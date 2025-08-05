@@ -86,6 +86,14 @@ A basic example showing off integration with Hierarchy, Property, and Timeline p
 
 # Work in Progress:
 
+### 6. **Tool Palette Panel**
+Organized tool selection:
+- Categorized tool groups
+- Search and favorites
+- Customizable layouts (grid/list)
+- Tool descriptions and shortcuts
+![Tool Palette Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ToolPalettePanel.png "Tool Palette Panel")
+
 ### 3. **Docking System**
 A framework for dockable panels:
 - Drag-and-drop panel arrangement
@@ -121,13 +129,6 @@ Spreadsheet-like component:
 - Row selection and highlighting
 - Export to CSV/JSON
 - Perfect complement to the property inspector
-  
-### 6. **Tool Palette Panel**
-Organized tool selection:
-- Categorized tool groups
-- Search and favorites
-- Customizable layouts (grid/list)
-- Tool descriptions and shortcuts
   
 ### 7. **Chart/Graph Panel**
 Data visualization component:
