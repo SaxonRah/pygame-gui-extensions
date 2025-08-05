@@ -4,12 +4,18 @@
 
 # PyGame GUI Extensions - [Version 0.1]
 
+---
+
 Well-built GUI widgets built on top of pygame-ce and pygame-gui for building tools easier with pygame-ce and pygame-gui.
 
 This extension is being built to facilitate [PySpine](https://github.com/SaxonRah/PySpine) and [StoryForge](https://github.com/SaxonRah/StoryForge). 
 
 ---
+
 # Completed Version 0.1 Panels
+
+---
+
 ### **Hierarchy Panel**
 Tree-view widget for organizing data structures:
 - Expandable/collapsible folder and item nodes
@@ -19,6 +25,8 @@ Tree-view widget for organizing data structures:
 - Events for selection, expansion, and context menus
 - Perfect for file explorers, scene graphs, or project trees
 ![Hierarchy Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/HierarchyPanel.png "Hierarchy Panel")
+
+---
 
 ### **Property Inspector Panel**
 Comprehensive property editing interface:
@@ -30,6 +38,8 @@ Comprehensive property editing interface:
 - Essential companion to hierarchy panels for object editing
 ![Property Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/PropertyPanel.png "Property Panel")
 
+---
+
 ### **Node Editor Panel**
 Visual programming interface:
 - Draggable nodes with input/output sockets
@@ -38,6 +48,8 @@ Visual programming interface:
 - Zoom/pan navigation
 - Would pair excellently with the property inspector
 ![Node Editor Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NodeEditorPanel.png "Node Editor Panel")
+
+---
 
 ### **Timeline/Animation Panel**
 For keyframe animation:
@@ -48,6 +60,8 @@ For keyframe animation:
 - Integration with the hierarchy for animated objects
 ![Timeline Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/TimelinePanel.png "Timeline Panel")
 
+---
+
 ### **Mini-map/Navigator Panel**
 For large content areas:
 - Thumbnail view of large canvases
@@ -55,6 +69,8 @@ For large content areas:
 - Zoom controls
 - Works great with node editors or large hierarchies
 ![Navigator Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/NavigatorPanel.png "Navigator Panel")
+
+---
 
 ### **Asset Browser Panel**
 Media asset management:
@@ -65,6 +81,7 @@ Media asset management:
 - Drag-and-drop to hierarchy
 ![Asset Browser Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/AssetBrowserPanel.png "Asset Browser Panel")
 
+---
 
 ### **Console/Terminal Panel**
 A powerful console for logging, command execution, and REPL functionality:
@@ -76,6 +93,16 @@ A powerful console for logging, command execution, and REPL functionality:
 ![Console Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ConsolePanel.png "Console Panel")
 
 ---
+
+### **Tool Palette Panel**
+Organized tool selection:
+- Categorized tool groups
+- Search and favorites
+- Customizable layouts (grid/list)
+- Tool descriptions and shortcuts
+![Tool Palette Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ToolPalettePanel.png "Tool Palette Panel")
+
+---
 # Examples:
 
 ### **Skeletal Animation Example**
@@ -83,16 +110,12 @@ A basic example showing off integration with Hierarchy, Property, and Timeline p
 ![Skeletal Animation Example](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/Example_SkeletonAnimation.png "Skeletal Animation Example")
 
 ---
+---
+---
 
 # Work in Progress:
 
-### 6. **Tool Palette Panel**
-Organized tool selection:
-- Categorized tool groups
-- Search and favorites
-- Customizable layouts (grid/list)
-- Tool descriptions and shortcuts
-![Tool Palette Panel](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/ToolPalettePanel.png "Tool Palette Panel")
+---
 
 ### 3. **Docking System**
 A framework for dockable panels:
@@ -104,9 +127,15 @@ A framework for dockable panels:
 ![Docking System](https://github.com/SaxonRah/pygame-gui-extensions/blob/main/images/DockingSystem.png "Docking System")
 
 ---
+---
+---
+
 
 ## Future Panels
-### 2. **Code Editor Panel** 
+
+---
+
+### 1. **Code Editor Panel** 
 A syntax-highlighted text editor:
 - Line numbers and folding
 - Find/replace with regex support
@@ -114,7 +143,9 @@ A syntax-highlighted text editor:
 - Multiple language support (Python, JSON, etc.)
 - Integration with the property inspector for script editing
   
-### 4. **File Browser Panel**
+---
+
+### 2. **File Browser Panel**
 Enhanced file system navigation:
 - Thumbnail previews for images
 - File type filtering and search
@@ -122,7 +153,9 @@ Enhanced file system navigation:
 - Recent files and bookmarks
 - Integration with the hierarchy panel for project files
   
-### 5. **Data Grid/Table Panel**
+---
+
+### 3. **Data Grid/Table Panel**
 Spreadsheet-like component:
 - Sortable columns with custom comparers
 - In-cell editing with validation
@@ -130,7 +163,9 @@ Spreadsheet-like component:
 - Export to CSV/JSON
 - Perfect complement to the property inspector
   
-### 7. **Chart/Graph Panel**
+---
+
+### 4. **Chart/Graph Panel**
 Data visualization component:
 - Line charts, bar charts, pie charts
 - Real-time data updates
@@ -138,7 +173,9 @@ Data visualization component:
 - Export to image formats
 - Great for debugging and analytics
 
-### 8. **Log Viewer Panel**
+---
+
+### 5. **Log Viewer Panel**
 Advanced logging interface:
 - Filtering by level/category
 - Search and highlighting
